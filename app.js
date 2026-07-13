@@ -1607,10 +1607,20 @@ boot();
 applyTheme();
 route();
 
-/* 起動演出を少し見せてから消す（初回の1回だけ・戻る操作では出さない） */
+/* 起動演出を少し見せてから消す（初回の1回だけ・戻る操作では出さない）。
+ * 演出が明けたら、まだ名前をつけていない子には一度だけ「お名前つけてあげて」と聞く。 */
 (() => {
-  const sp = $('#splash'); if (!sp) return;
-  setTimeout(() => { sp.classList.add('hide'); setTimeout(() => sp.remove(), 600); }, 1500);
+  const sp = $('#splash');
+  const after = () => {
+    if (typeof Pet === 'undefined') return;
+    if (Pet.hasName() || localStorage.getItem('kinpu.pet.named1') === '1') return;
+    localStorage.setItem('kinpu.pet.named1', '1');   // 一度きり。しつこく聞かない
+    const n = prompt('あたらしい相棒が やってきたよ🥚\nお名前を つけてあげて（12文字まで・あとで変えられる）', '');
+    if (n && n.trim()) { Pet.setName(n); petToast(`${Pet.getName()}、よろしくね`); }
+    renderPet();
+  };
+  if (!sp) { after(); return; }
+  setTimeout(() => { sp.classList.add('hide'); setTimeout(() => { sp.remove(); after(); }, 600); }, 1500);
 })();
 
 /* ロックが有効なら、起動時に解錠を求める（画面はz-indexで覆う） */
