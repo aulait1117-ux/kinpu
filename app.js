@@ -204,6 +204,7 @@ function renderHome() {
   fill('#h-recent', recent, 'まだ何も見ていない。');
   fill('#h-fav', favs.map((k) => ({ type: k.split(':')[0], id: k.split(':').slice(1).join(':') })), '⭐ を押すとここに出る。');
   fill('#h-notes', [...notes].sort((a, b) => b.updatedAt - a.updatedAt).map((n) => ({ type: 'note', id: n.id })), '右下の＋から書く。');
+  renderPet();
 }
 
 /* ---------- 菌一覧（カード） ---------- */
@@ -260,7 +261,7 @@ function orgCard(o) {
 let curOrg = null;
 function renderOrg(id) {
   const o = orgById(id); if (!o) { location.hash = '#/orgs'; return; }
-  curOrg = o; touch('org', id);
+  curOrg = o; touch('org', id); petAct('view_org');
   const d = detOf(id);
   const tone = d.g === '陽性' ? 'pos' : d.g === '陰性' ? 'neg' : '';
 
@@ -411,7 +412,7 @@ function hitCard(r) {
   c.innerHTML = h;
   const lab = el('label'); lab.style.cssText = 'display:flex;gap:7px;align-items:center;font-size:12.5px;cursor:pointer';
   const cb = el('input'); cb.type = 'checkbox'; cb.checked = v;
-  cb.onchange = () => { if (cb.checked) verified[r.id] = true; else delete verified[r.id]; save(LS.verified, verified); renderOrg(curOrg.id); };
+  cb.onchange = () => { if (cb.checked) { verified[r.id] = true; petAct('verify'); } else delete verified[r.id]; save(LS.verified, verified); renderOrg(curOrg.id); };
   lab.appendChild(cb); lab.appendChild(document.createTextNode('CLSI M100 と自施設のSOPで確認した'));
   c.appendChild(lab);
   return c;
@@ -545,8 +546,11 @@ const shapeBucket = (s) => {
 };
 function flowValue(o, key) {
   const d = detOf(o.id), t = FLOW_TAGS[o.id] || {};
-  if (key === 'gram') return gramBucket(d.g);
-  if (key === 'shape') return shapeBucket(d.s);
+  /* gram/shape が「その他」に落ちる菌（gram-variable・染まらない・多形性）は、
+   * その質問では判別できない＝絞り込みに使わない（null扱いで残す）。
+   * これをしないと、ガードネレラ等がグラム染色を選んだ瞬間に消える。 */
+  if (key === 'gram') { const g = gramBucket(d.g); return g === 'その他' ? undefined : g; }
+  if (key === 'shape') { const s = shapeBucket(d.s); return s === 'その他' ? undefined : s; }
   return t[key];   // undefined なら「この検査では絞れない」＝除外しない
 }
 function flowCandidates() {
@@ -567,8 +571,11 @@ function renderFlow() {
   Object.keys(flowAns).forEach((k) => {
     const st = steps.find((s) => s.key === k);
     const opt = st && st.options.find((o) => o.v === flowAns[k]);
-    const c = el('button', 'chip mint');
-    c.textContent = (opt ? opt.label : `${k}:${flowAns[k]}`) + ' ✕';
+    const label = opt ? opt.label
+      : flowAns[k] === '__skip__' ? `${st ? st.label.replace(/は？$/, '') : k}：わからない`
+      : `${k}:${flowAns[k]}`;
+    const c = el('button', 'chip ' + (flowAns[k] === '__skip__' ? 'grey' : 'mint'));
+    c.textContent = label + ' ✕';
     c.onclick = () => { delete flowAns[k]; renderFlow(); };
     ch.appendChild(c);
   });
@@ -593,7 +600,7 @@ function renderFlow() {
       /* その選択で候補が残るものだけ出す（0件になる選択肢は見せない） */
       if (cand.length && !cand.some((o) => flowValue(o, next.key) === opt.v)) return;
       const b = el('button', 'quiet'); b.textContent = opt.label;
-      b.onclick = () => { flowAns[next.key] = opt.v; renderFlow(); };
+      b.onclick = () => { const first = !Object.keys(flowAns).length; flowAns[next.key] = opt.v; if (first) petAct('flow'); renderFlow(); };
       row.appendChild(b);
     });
     const skip = el('button', 'chip grey'); skip.textContent = 'わからない / 次へ';
@@ -952,6 +959,7 @@ async function makeDaily() {
       ${sec('トラブルと対応', d.troubles)}${sec('明日やること', d.tomorrow)}
       <p style="margin-top:10px;font-size:11.5px;color:var(--tx3)">今日のノート${today.length}件から。ノートに書いたことだけをまとめている。</p></div>
       <div class="row" style="margin-top:10px"><button class="quiet" id="dl-copy">📋 コピー</button></div>`;
+    petAct('daily');
     $('#dl-copy').onclick = () => {
       const txt = $('#dl-out .blk').innerText;
       navigator.clipboard?.writeText(txt).then(() => { $('#dl-copy').textContent = '✓ コピーした'; });
@@ -1011,6 +1019,7 @@ async function runAI() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
     showAI(d);
+    petAct('ai');
     if (d.title && !$('#e-ttl').value) $('#e-ttl').value = d.title;
     if (d.kind) $('#e-kind').value = d.kind;
     if (d.tags?.length) $('#e-tags').value = d.tags.join(', ');
@@ -1056,6 +1065,7 @@ async function saveNote() {
     updatedAt: Date.now(),
   };
   const prev = notes.slice();   // 保存に失敗したら巻き戻すための退避
+  const wasNew = !editing;
   if (editing) notes[notes.findIndex((n) => n.id === editing.id)] = rec; else notes.unshift(rec);
 
   /* 保存が成功して初めて、消えた写真を削除し、画面を進める。
@@ -1066,6 +1076,8 @@ async function saveNote() {
   }
   if (editing?.photos) for (const old of editing.photos) if (!photoIds.includes(old)) delPhoto(old);
   aiDraft = null;
+  if (wasNew) petAct('note');
+  if (photoIds.length && wasNew) petAct('photo');
   location.hash = hrefOf('note', rec.id);
 }
 
@@ -1281,6 +1293,50 @@ async function lockBio() {
   else { $('#lock-msg').textContent = '番号でも開けます'; $('#lock-msg').className = 'lockmsg'; }
 }
 
+/* ---------- 相棒きんぺい ---------- */
+function renderPet() {
+  const s = Pet.state();
+  const stage = Pet.stageOf(s.xp);
+  const nx = Pet.next(s.xp);
+  $('#pet-fig').innerHTML = petSVG(stage.form, { size: 84 });
+  $('#pet-name').innerHTML = `${esc(Pet.getName())} <span class="lv">Lv.${stage.lv} ${esc(stage.name)}</span>`;
+  $('#pet-word').textContent = stage.word;
+  const pct = nx ? Math.min(100, Math.round(((s.xp - stage.need) / (nx.need - stage.need)) * 100)) : 100;
+  $('#pet-bar').style.width = pct + '%';
+  $('#pet-meta').innerHTML = nx
+    ? `<span>つぎまで あと ${nx.need - s.xp}</span><span class="fire">🔥 ${s.streak}日れんぞく</span>`
+    : `<span>さいだいまで育った！</span><span class="fire">🔥 ${s.streak}日れんぞく</span>`;
+}
+let petToastTimer = null;
+function petToast(msg, sub, opts = {}) {
+  const t = $('#pet-toast');
+  $('#pet-toast-fig').innerHTML = petSVG(Pet.stageOf(Pet.state().xp).form, { size: 40 });
+  $('#pet-toast-msg').innerHTML = `${esc(msg)}${sub ? `<small>${esc(sub)}</small>` : ''}`;
+  t.hidden = false;
+  t.classList.toggle('levelup', !!opts.levelup);
+  $('#pet-toast-fig').classList.toggle('pet-celebrate', !!opts.levelup);
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(petToastTimer);
+  petToastTimer = setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => { t.hidden = true; }, 350);
+  }, opts.levelup ? 3200 : 1800);
+}
+/* 行動を記録し、育ったら祝う。画面が忙しくならないよう、経験値が入ったときだけ出す。 */
+function petAct(kind) {
+  if (typeof Pet === 'undefined') return;
+  const r = Pet.act(kind);
+  if (!r || !r.gained) return;
+  if (r.leveledTo) {
+    Pet.markSeen(r.leveledTo.lv);
+    petToast(`${Pet.getName()}が そだった！`, `Lv.${r.leveledTo.lv} ${r.leveledTo.name}・${r.leveledTo.word}`, { levelup: true });
+  } else {
+    petToast(`${r.msg}（+${r.gained}）`);
+  }
+  if (!$('#sc-home').classList.contains('on')) return;
+  renderPet();
+}
+
 /* ---------- テーマ ---------- */
 function applyTheme() {
   const t = load(LS.theme, 'light');
@@ -1299,8 +1355,12 @@ function route() {
   const part = parts[0] || 'home';
   const arg = parts.slice(1).join('/');
   const sc = SCREENS[part] || 'sc-home';
-  /* 電話報告テンプレを離れたら、入力を消す（患者情報を端末に残さない約束） */
-  if (part !== 'report') document.querySelectorAll('.rp').forEach((inp) => { inp.value = ''; });
+  /* 電話報告テンプレを離れたら、入力と組み上げた下書きの両方を消す（患者情報を残さない約束）。
+   * 入力欄(.rp)だけでなく #rp-out にも患者情報が入っているので、そこも消す。 */
+  if (part !== 'report') {
+    document.querySelectorAll('.rp').forEach((inp) => { inp.value = ''; });
+    const ro = $('#rp-out'); if (ro) ro.textContent = '';
+  }
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === sc));
   window.scrollTo(0, 0);
 
@@ -1332,6 +1392,15 @@ $('#btn-back').onclick = () => history.back();
 $('#btn-set').onclick = () => (location.hash = '#/set');
 $('#btn-search').onclick = openPal;
 $('#home-search').onclick = openPal;
+/* きんぺいをタップ：名前をつける／変える。少しだけ喜ぶ。 */
+$('#pet-widget').onclick = () => {
+  const cur = Pet.getName();
+  const n = prompt('この子の名前をつけてあげて（12文字まで）', cur);
+  if (n === null) return;
+  Pet.setName(n);
+  renderPet();
+  petToast(`${Pet.getName()}、よろしくね`);
+};
 $('#go-help').onclick = () => (location.hash = '#/help');
 $('#go-report').onclick = () => (location.hash = '#/report');
 $('#go-daily').onclick = () => (location.hash = '#/daily');

@@ -97,7 +97,6 @@ const FLOW_TAGS = {
   eggerthella:      { oxygen: '嫌気', special: ['メトロニダゾール耐性報告あり'] },
   gardnerella:      { special: ['clue cell', '細菌性腟症', 'Nugentスコア'] },
   mobiluncus:       { oxygen: '嫌気', special: ['湾曲桿菌', '細菌性腟症'] },
-  actinomyces_dup:  {},
 
   /* ===== 抗酸菌 ===== */
   mtb:        { special: ['チール・ネルゼン染色', '小川培地4〜8週', '2類', '空気感染'] },

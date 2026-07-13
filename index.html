@@ -206,6 +206,40 @@ nav.tab button.on{color:var(--mint)}
   background:var(--sun-bg);font-size:12.5px;line-height:1.8;color:var(--tx2)}
 .disc b{color:var(--sun)}
 
+/* ===== 相棒きんぺい ===== */
+.petwidget{display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  background:linear-gradient(135deg,var(--lav-bg),var(--pink-bg));
+  border:1.5px solid var(--line);border-radius:20px;padding:14px 16px;cursor:pointer;
+  margin-top:6px;box-shadow:var(--shadow)}
+.petwidget:active{transform:scale(.99)}
+.pet-anim{flex:none;animation:petbob 2.6s ease-in-out infinite}
+@keyframes petbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.pet-svg{display:block}
+.pet-info{flex:1;min-width:0}
+.pet-name{font-weight:700;font-size:15px}
+.pet-name .lv{font-family:var(--fnt2);font-size:12px;color:var(--lav);margin-left:6px}
+.pet-word{font-size:12.5px;color:var(--tx2);margin:1px 0 7px}
+.pet-bar{height:9px;border-radius:999px;background:var(--bg2);overflow:hidden}
+.pet-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--mint),var(--lav));
+  width:0;transition:width .5s ease}
+.pet-meta{font-size:11px;color:var(--tx3);margin-top:5px;display:flex;gap:10px}
+.pet-meta .fire{color:var(--sun)}
+
+/* きんぺいトースト */
+.pet-toast{position:fixed;left:50%;bottom:calc(var(--nav) + env(safe-area-inset-bottom) + 22px);
+  transform:translateX(-50%) translateY(20px);z-index:55;opacity:0;pointer-events:none;
+  display:flex;align-items:center;gap:9px;
+  background:var(--card);border:1.5px solid var(--lav);border-radius:999px;padding:7px 16px 7px 8px;
+  box-shadow:0 6px 20px rgba(0,0,0,.15);transition:opacity .3s,transform .3s;max-width:90vw}
+.pet-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.pet-toast-fig{flex:none}
+.pet-toast-msg{font-size:13px;font-weight:700}
+.pet-toast-msg small{display:block;font-weight:400;color:var(--tx2);font-size:11px}
+.pet-toast.levelup{border-color:var(--sun);animation:pop .5s}
+@keyframes pop{0%{transform:translateX(-50%) scale(.8)}60%{transform:translateX(-50%) scale(1.08)}100%{transform:translateX(-50%) scale(1)}}
+.pet-celebrate{animation:petspin .7s ease}
+@keyframes petspin{0%{transform:rotate(0) scale(1)}30%{transform:rotate(-12deg) scale(1.15)}60%{transform:rotate(12deg) scale(1.15)}100%{transform:rotate(0) scale(1)}}
+
 /* ON/OFFトグル */
 .toggle{display:flex;align-items:center;justify-content:space-between;padding:11px 0;
   border-bottom:1px dashed var(--line);font-size:14px;cursor:pointer}
@@ -266,8 +300,19 @@ nav.tab button.on{color:var(--mint)}
 
   <!-- ===== ダッシュボード ===== -->
   <section class="screen on" id="sc-home">
+    <!-- 相棒きんぺい（育成の遊び心） -->
+    <button class="petwidget" id="pet-widget">
+      <div class="pet-anim" id="pet-fig"></div>
+      <div class="pet-info">
+        <div class="pet-name" id="pet-name"></div>
+        <div class="pet-word" id="pet-word"></div>
+        <div class="pet-bar"><div class="pet-bar-fill" id="pet-bar"></div></div>
+        <div class="pet-meta" id="pet-meta"></div>
+      </div>
+    </button>
+
     <!-- スマホの主導線。Ctrl+Kはおまけ（スマホでは押せないので当てにしない） -->
-    <button class="search" id="home-search" style="text-align:left;color:var(--tx3);cursor:pointer;margin-top:4px">
+    <button class="search" id="home-search" style="text-align:left;color:var(--tx3);cursor:pointer;margin-top:12px">
       🔍 菌・抗菌薬・耐性機序・ノートを検索
     </button>
     <div class="card flat" style="margin-top:14px">
@@ -581,6 +626,12 @@ nav.tab button.on{color:var(--mint)}
   <button data-go="notes"><span class="e">📝</span>ノート</button>
 </nav>
 
+<!-- きんぺいのひとことトースト（行動・レベルアップ時にちょこっと出る） -->
+<div class="pet-toast" id="pet-toast" hidden>
+  <div class="pet-toast-fig" id="pet-toast-fig"></div>
+  <div class="pet-toast-msg" id="pet-toast-msg"></div>
+</div>
+
 <div class="pal" id="pal" hidden>
   <div class="box">
     <input type="text" id="pal-q" placeholder="菌・薬・耐性機序・ノート・タグを横断検索…" />
@@ -593,6 +644,7 @@ nav.tab button.on{color:var(--mint)}
 <script src="mechanisms.js"></script>
 <script src="details.js"></script>
 <script src="flowdata.js"></script>
+<script src="pet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
