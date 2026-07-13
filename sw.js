@@ -8,7 +8,7 @@
  *  - AI整理（/organize）だけは絶対にキャッシュしない。オフラインなら素直に失敗させる。
  */
 
-const CACHE = 'kinpu-v3';
+const CACHE = 'kinpu-v4';
 const SHELL = [
   './',
   './index.html',
@@ -45,27 +45,24 @@ self.addEventListener('fetch', (e) => {
   /* AIサーバーは通さない。オフラインなら失敗が正しい（古い返事を返す方が害になる） */
   if (url.pathname.endsWith('/organize') || url.pathname.endsWith('/health')) return;
 
+  /* ネットワーク優先。オンラインなら常に最新を取り、キャッシュはオフライン時の予備に徹する。
+   * cache-first をやめた理由：app.js だけ先に更新され rules.js が古いまま、といった
+   * 部品バージョンの食い違いが起きうる（静的レビュー#6）。オンラインで毎回最新を揃えれば起きない。 */
   e.respondWith((async () => {
-    const cached = await caches.match(req, { ignoreSearch: true });
-
-    /* 裏で更新を取りに行く。取れたら次回に効く。取れなくても黙って諦める。 */
-    const fresh = fetch(req).then((res) => {
+    try {
+      const res = await fetch(req);
       if (res && (res.ok || res.type === 'opaque')) {
-        caches.open(CACHE).then((c) => c.put(req, res.clone())).catch(() => {});
+        const c = await caches.open(CACHE); c.put(req, res.clone()).catch(() => {});
       }
       return res;
-    }).catch(() => null);
-
-    if (cached) return cached;
-
-    const res = await fresh;
-    if (res) return res;
-
-    /* オフラインで、キャッシュにも無い。ページ遷移ならアプリの殻を返す（ハッシュ遷移なので中身は動く） */
-    if (req.mode === 'navigate') {
-      const shell = await caches.match('./index.html');
-      if (shell) return shell;
+    } catch {
+      const cached = await caches.match(req, { ignoreSearch: true });
+      if (cached) return cached;
+      if (req.mode === 'navigate') {
+        const shell = await caches.match('./index.html');
+        if (shell) return shell;
+      }
+      return new Response('', { status: 504, statusText: 'offline' });
     }
-    return new Response('', { status: 504, statusText: 'offline' });
   })());
 });

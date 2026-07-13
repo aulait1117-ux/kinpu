@@ -7,6 +7,8 @@ const LS = {
   notes: 'kinpu.notes', orgs: 'kinpu.customOrgs', verified: 'kinpu.verified',
   sir: 'kinpu.sir', recent: 'kinpu.recent', fav: 'kinpu.fav',
   theme: 'kinpu.theme', ai: 'kinpu.aiUrl',
+  pin: 'kinpu.pinHash', pinSalt: 'kinpu.pinSalt', bio: 'kinpu.bioId',
+  lockEach: 'kinpu.lockEach',
 };
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 /* localStorage は約5MBで頭打ち。超えると例外を投げるので、黙ってノートを失わないよう捕まえる。
@@ -310,7 +312,7 @@ function renderOrg(id) {
     const sw = el('span'); sw.style.cssText = 'display:flex;gap:5px;flex:none';
     ['S', 'I', 'R'].forEach((v) => {
       const bb = el('button', 'chip ' + (sir[dr] === v ? (v === 'S' ? 'mint' : v === 'I' ? 'sun' : 'red') : 'grey'));
-      bb.textContent = v; bb.style.cssText += 'width:32px;justify-content:center;font-family:var(--fnt2)';
+      bb.textContent = v; bb.style.cssText += 'width:40px;height:38px;justify-content:center;font-family:var(--fnt2);font-size:14px';
       bb.onclick = () => {
         const s = sirState[o.id] = sirState[o.id] || {};
         if (s[dr] === v) delete s[dr]; else s[dr] = v;
@@ -626,9 +628,13 @@ function noteCard(n, q) {
 }
 
 /* ---------- ノート閲覧（折りたたみ） ---------- */
+let viewToken = 0;
 async function renderView(id) {
   const n = notes.find((x) => x.id === id); if (!n) { location.hash = '#/notes'; return; }
   editing = n; touch('note', id);
+  /* この描画の通し番号。await の後で別の描画が始まっていたら、古い方は中断する
+   * （写真読込中に⭐やページ遷移で再入すると、写真が二重に追加される。静的レビュー#2） */
+  const my = ++viewToken;
   const k = kindOf(n.kind), a = normAI(n.ai) || {};
   const b = $('#v-body'); b.innerHTML = '';
 
@@ -679,7 +685,9 @@ async function renderView(id) {
   b.appendChild(raw);
 
   for (const pid of n.photos || []) {
-    const du = await getPhoto(pid); if (!du) continue;
+    const du = await getPhoto(pid);
+    if (my !== viewToken) return;   // 描画が入れ替わった。この続きは捨てる
+    if (!du) continue;
     const im = el('img', 'shot'); im.src = du; b.appendChild(im);
     const cap = (n.captions || {})[pid];
     if (cap) {
@@ -688,6 +696,7 @@ async function renderView(id) {
       b.appendChild(cc);
     }
   }
+  if (my !== viewToken) return;
 
   const row = el('div', 'row'); row.style.marginTop = '20px';
   const e = el('button', 'quiet'); e.textContent = '✏️ 編集する';
@@ -842,7 +851,6 @@ async function saveNote() {
 
   const photoIds = [], captions = {};
   for (const p of editPhotos) { await putPhoto(p.id, p.dataUrl); photoIds.push(p.id); if (p.caption) captions[p.id] = p.caption; }
-  if (editing?.photos) for (const old of editing.photos) if (!photoIds.includes(old)) delPhoto(old);
 
   const rec = {
     id: editing ? editing.id : uid(),
@@ -855,8 +863,16 @@ async function saveNote() {
     createdAt: editing ? editing.createdAt : Date.now(),
     updatedAt: Date.now(),
   };
+  const prev = notes.slice();   // 保存に失敗したら巻き戻すための退避
   if (editing) notes[notes.findIndex((n) => n.id === editing.id)] = rec; else notes.unshift(rec);
-  save(LS.notes, notes);
+
+  /* 保存が成功して初めて、消えた写真を削除し、画面を進める。
+   * 順番を守らないと「保存は失敗したのに古い写真だけ消えた」が起きる（静的レビュー#1）。 */
+  if (!save(LS.notes, notes)) {
+    notes = prev;   // localStorageは変わっていない。メモリも戻す
+    return;         // save() 側が容量警告を出している。画面は進めない
+  }
+  if (editing?.photos) for (const old of editing.photos) if (!photoIds.includes(old)) delPhoto(old);
   aiDraft = null;
   location.hash = hrefOf('note', rec.id);
 }
@@ -868,6 +884,19 @@ function renderSet() {
   $('#s-orgs').textContent = customOrgs.length;
   $('#s-verified').textContent = `${Object.keys(verified).length} / ${RULES.length}`;
   $('#s-ai').value = aiUrl;
+  renderLockSettings();
+}
+function renderLockSettings() {
+  const on = Lock.isOn();
+  $('#lk-on').checked = on;
+  $('#lk-bio-row').hidden = !on;
+  $('#lk-lock-row').hidden = !on;
+  $('#lk-change-row').hidden = !on;
+  $('#lk-bio').checked = Lock.bioEnabled();
+  $('#lk-lock').checked = Lock.lockEach();
+  const label = $('#lk-bio-label');
+  if (!Lock.bioAvailable()) { label.textContent = 'Face ID / 指紋（この端末では使えない）'; $('#lk-bio').disabled = true; }
+  else { label.textContent = 'Face ID / 指紋でも開く'; $('#lk-bio').disabled = false; }
 }
 async function exportAll() {
   const photos = {};
@@ -880,10 +909,19 @@ async function exportAll() {
 }
 async function importAll(f) {
   let d; try { d = JSON.parse(await f.text()); } catch { alert('読めないファイル。'); return; }
-  if (!d.notes) { alert('菌譜の書き出しファイルではない。'); return; }
+  if (!Array.isArray(d.notes)) { alert('菌譜の書き出しファイルではない。'); return; }
   if (!confirm(`ノート ${d.notes.length}件を読み込む。今あるノートは置き換わる。`)) return;
-  for (const [k, v] of Object.entries(d.photos || {})) await putPhoto(k, v);
-  notes = d.notes; customOrgs = d.customOrgs || []; verified = d.verified || {}; favs = d.favs || [];
+
+  /* 読み込むデータも、起動時と同じように型を均す（壊れた/古い形式でも落ちないように。#3） */
+  const incoming = sanitizeNotes(d.notes);
+  const newPhotoIds = new Set(incoming.flatMap((n) => n.photos || []));
+  /* 置き換えで参照されなくなる古い写真は、IndexedDBから消す（孤児化を防ぐ。#5） */
+  const oldPhotoIds = new Set(notes.flatMap((n) => n.photos || []));
+  for (const [k, v] of Object.entries(d.photos || {})) if (newPhotoIds.has(k)) await putPhoto(k, v);
+  for (const old of oldPhotoIds) if (!newPhotoIds.has(old)) delPhoto(old);
+
+  notes = incoming;
+  customOrgs = asList(d.customOrgs); verified = asObj(d.verified); favs = asStrList(d.favs);
   save(LS.notes, notes); save(LS.orgs, customOrgs); save(LS.verified, verified); save(LS.fav, favs);
   alert('読み込んだ。'); route();
 }
@@ -896,6 +934,159 @@ function addOrg() {
   customOrgs.push({ id, jp, name, group, drugs, intrinsic: [], intrinsicCodes: [], expectedS: [], note: '' });
   save(LS.orgs, customOrgs);
   renderOrgs();
+}
+
+/* ==================== 画面ロック ====================
+ * スマホ本体を人に触られてもノートを見られないための鍵。サーバー不要。
+ * PINは生のまま保存せず、端末ごとの塩を足してSHA-256でハッシュ化して保存する。
+ * Face ID / 指紋は WebAuthn の platform authenticator を「ローカルの生体ゲート」として使う
+ * （サーバー照合はしない。生体認証が通れば解錠、という端末内だけの用途）。 */
+const Lock = (() => {
+  const enc = new TextEncoder();
+  const buf2b64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b)));
+  const b642buf = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+  async function sha(pin, salt) {
+    const h = await crypto.subtle.digest('SHA-256', enc.encode(salt + ':' + pin));
+    return buf2b64(h);
+  }
+  const isOn = () => !!localStorage.getItem(LS.pin);
+  const lockEach = () => localStorage.getItem(LS.lockEach) === '1';
+  const bioEnabled = () => !!localStorage.getItem(LS.bio);
+
+  async function setPin(pin) {
+    const salt = buf2b64(crypto.getRandomValues(new Uint8Array(16)));
+    localStorage.setItem(LS.pinSalt, salt);
+    localStorage.setItem(LS.pin, await sha(pin, salt));
+  }
+  async function verify(pin) {
+    const salt = localStorage.getItem(LS.pinSalt) || '';
+    return isOn() && (await sha(pin, salt)) === localStorage.getItem(LS.pin);
+  }
+  function disable() {
+    [LS.pin, LS.pinSalt, LS.bio, LS.lockEach].forEach((k) => localStorage.removeItem(k));
+  }
+
+  const bioAvailable = () => !!(window.PublicKeyCredential && navigator.credentials);
+  async function enableBio() {
+    if (!bioAvailable()) throw new Error('この端末では顔認証・指紋が使えない');
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: '菌譜', id: location.hostname },
+        user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'kinpu', displayName: '菌譜' },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+        timeout: 60000,
+      },
+    });
+    if (!cred) throw new Error('登録できなかった');
+    localStorage.setItem(LS.bio, buf2b64(cred.rawId));
+  }
+  async function tryBio() {
+    if (!bioEnabled() || !bioAvailable()) return false;
+    try {
+      const ok = await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          allowCredentials: [{ type: 'public-key', id: b642buf(localStorage.getItem(LS.bio)) }],
+          userVerification: 'required', timeout: 60000,
+        },
+      });
+      return !!ok;
+    } catch { return false; }
+  }
+  function disableBio() { localStorage.removeItem(LS.bio); }
+
+  return { isOn, lockEach, bioEnabled, bioAvailable, setPin, verify, disable, enableBio, tryBio, disableBio,
+    setLockEach: (v) => v ? localStorage.setItem(LS.lockEach, '1') : localStorage.removeItem(LS.lockEach) };
+})();
+
+/* ロック画面（テンキー）。用途：unlock=解錠 / set=新規設定 / change=変更 */
+let lockMode = 'unlock', lockBuf = '', lockFirst = '', lockAfter = null, lockLen = 4;
+function showLock(mode, after) {
+  lockMode = mode; lockBuf = ''; lockFirst = ''; lockAfter = after || null;
+  $('#lockgate').hidden = false;
+  buildKeypad();
+  drawLockDots();
+  $('#lock-title').textContent = mode === 'unlock' ? '暗証番号を入れる'
+    : mode === 'set' ? '新しい暗証番号を決める（4〜6桁）' : '今の暗証番号を入れる';
+  $('#lock-msg').textContent = ''; $('#lock-msg').className = 'lockmsg';
+  if (mode === 'unlock' && Lock.bioEnabled() && Lock.bioAvailable()) setTimeout(() => lockBio(), 300);
+}
+function hideLock() { $('#lockgate').hidden = true; }
+function drawLockDots() {
+  const box = $('#lock-dots'); box.innerHTML = '';
+  const n = Math.max(lockLen, lockBuf.length);
+  for (let i = 0; i < n; i++) {
+    const d = el('div', 'd' + (i < lockBuf.length ? ' on' : ''));
+    box.appendChild(d);
+  }
+}
+function buildKeypad() {
+  const kp = $('#keypad'); kp.innerHTML = '';
+  const canBio = lockMode === 'unlock' && Lock.bioEnabled() && Lock.bioAvailable();
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', canBio ? 'face' : 'ok', '0', 'del'];
+  keys.forEach((k) => {
+    const b = el('button');
+    if (k === 'del') { b.textContent = '⌫'; b.onclick = () => { lockBuf = lockBuf.slice(0, -1); drawLockDots(); }; }
+    else if (k === 'face') { b.textContent = '😊'; b.className = 'face'; b.onclick = lockBio; }
+    else if (k === 'ok') { b.textContent = '決定'; b.className = 'wide'; b.onclick = lockSubmit; }
+    else { b.textContent = k; b.onclick = () => lockPush(k); }
+    kp.appendChild(b);
+  });
+}
+function lockPush(d) {
+  if (lockBuf.length >= 6) return;
+  lockBuf += d; drawLockDots();
+  /* 解錠モードで、設定桁数に達したら自動照合 */
+  if (lockMode === 'unlock' && lockBuf.length >= 4) autoTryUnlock();
+}
+let unlockTimer = null;
+function autoTryUnlock() {
+  clearTimeout(unlockTimer);
+  unlockTimer = setTimeout(lockSubmit, 250);   // 続けて押す余地を残す
+}
+async function lockSubmit() {
+  const pin = lockBuf;
+  if (lockMode === 'unlock') {
+    if (pin.length < 4) return;
+    if (await Lock.verify(pin)) { hideLock(); return; }
+    lockBuf = ''; failLock('番号が違います'); return;
+  }
+  if (lockMode === 'set' || lockMode === 'change') {
+    if (lockMode === 'change' && !lockFirst) {
+      /* まず現在の番号を確認 */
+      if (!(await Lock.verify(pin))) { lockBuf = ''; failLock('今の番号が違います'); return; }
+      lockMode = 'set'; lockBuf = ''; lockFirst = '__verified__';
+      $('#lock-title').textContent = '新しい暗証番号を決める（4〜6桁）';
+      drawLockDots(); return;
+    }
+    if (pin.length < 4) { failLock('4桁以上にしてください'); return; }
+    if (!lockFirst || lockFirst === '__verified__') {
+      lockFirst = pin; lockBuf = '';
+      $('#lock-title').textContent = 'もう一度、同じ番号を入れる';
+      $('#lock-msg').textContent = ''; drawLockDots(); return;
+    }
+    if (pin !== lockFirst) { lockBuf = ''; lockFirst = ''; failLock('一致しません。最初から'); $('#lock-title').textContent = '新しい暗証番号を決める（4〜6桁）'; return; }
+    await Lock.setPin(pin);
+    lockLen = pin.length;
+    hideLock();
+    if (lockAfter) lockAfter();
+    return;
+  }
+}
+function failLock(msg) {
+  const dots = $('#lock-dots'); dots.classList.add('err');
+  setTimeout(() => dots.classList.remove('err'), 300);
+  $('#lock-msg').textContent = msg; $('#lock-msg').className = 'lockmsg bad';
+  drawLockDots();
+}
+async function lockBio() {
+  $('#lock-msg').textContent = '顔認証・指紋を確認中…'; $('#lock-msg').className = 'lockmsg';
+  const ok = await Lock.tryBio();
+  if (ok) hideLock();
+  else { $('#lock-msg').textContent = '番号でも開けます'; $('#lock-msg').className = 'lockmsg'; }
 }
 
 /* ---------- テーマ ---------- */
@@ -973,6 +1164,26 @@ $('#btn-del').onclick = () => {
   save(LS.notes, notes);
   location.hash = '#/notes';
 };
+/* 画面ロックの設定 */
+$('#lk-on').onchange = (e) => {
+  if (e.target.checked) {
+    showLock('set', () => { $('#lk-msg').innerHTML = '<div class="aibox">ロックを設定した。</div>'; renderLockSettings(); });
+  } else {
+    if (!confirm('画面ロックを解除する？')) { e.target.checked = true; return; }
+    Lock.disable(); renderLockSettings();
+    $('#lk-msg').innerHTML = '<div class="aibox">ロックを解除した。</div>';
+  }
+};
+$('#lk-bio').onchange = async (e) => {
+  if (e.target.checked) {
+    try { await Lock.enableBio(); $('#lk-msg').innerHTML = '<div class="aibox">Face ID / 指紋を登録した。</div>'; }
+    catch (err) { e.target.checked = false; $('#lk-msg').innerHTML = `<div class="aibox">登録できなかった（${esc(err.message)}）</div>`; }
+  } else { Lock.disableBio(); $('#lk-msg').innerHTML = '<div class="aibox">Face ID / 指紋を解除した。</div>'; }
+  renderLockSettings();
+};
+$('#lk-lock').onchange = (e) => Lock.setLockEach(e.target.checked);
+$('#lk-change').onclick = () => showLock('change', () => { $('#lk-msg').innerHTML = '<div class="aibox">暗証番号を変えた。</div>'; });
+
 $('#btn-export').onclick = exportAll;
 $('#btn-import').onclick = () => $('#imp').click();
 $('#imp').onchange = (e) => { if (e.target.files[0]) importAll(e.target.files[0]); e.target.value = ''; };
@@ -1033,6 +1244,13 @@ function boot() {
 boot();
 applyTheme();
 route();
+
+/* ロックが有効なら、起動時に解錠を求める（画面はz-indexで覆う） */
+if (Lock.isOn()) showLock('unlock');
+/* 「閉じるたびロック」がONなら、他アプリへ切り替えて戻ったとき再ロック */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && Lock.isOn() && Lock.lockEach()) showLock('unlock');
+});
 
 /* 検査室は電波が入らない。オフラインでも開けるようにする。 */
 if ('serviceWorker' in navigator) {

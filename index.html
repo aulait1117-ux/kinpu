@@ -205,9 +205,53 @@ nav.tab button.on{color:var(--mint)}
 .disc{margin:16px 0 0;padding:13px 15px;border:1.5px solid var(--sun);border-radius:var(--r);
   background:var(--sun-bg);font-size:12.5px;line-height:1.8;color:var(--tx2)}
 .disc b{color:var(--sun)}
+
+/* ON/OFFトグル */
+.toggle{display:flex;align-items:center;justify-content:space-between;padding:11px 0;
+  border-bottom:1px dashed var(--line);font-size:14px;cursor:pointer}
+.toggle:last-child{border:none}
+.sw{appearance:none;-webkit-appearance:none;width:46px;height:28px;border-radius:999px;
+  background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s;margin:0}
+.sw:checked{background:var(--mint)}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+  background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.sw:checked::after{transform:translateX(18px)}
+
+/* ===== 暗証番号ロック ===== */
+.lockgate{position:fixed;inset:0;z-index:100;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:24px}
+.lockbox{width:100%;max-width:320px;text-align:center}
+.lockmark{font-size:34px;margin-bottom:10px}
+.locktitle{font-weight:700;font-size:17px;margin-bottom:18px}
+.lockdots{display:flex;gap:14px;justify-content:center;height:18px;margin-bottom:14px}
+.lockdots .d{width:14px;height:14px;border-radius:50%;border:2px solid var(--tx3);transition:all .1s}
+.lockdots .d.on{background:var(--mint);border-color:var(--mint)}
+.lockdots.err .d{border-color:var(--red);animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.lockmsg{min-height:20px;font-size:13px;color:var(--tx2);margin-bottom:16px}
+.lockmsg.bad{color:var(--red)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:260px;margin:0 auto}
+.keypad button{height:64px;border-radius:16px;border:1.5px solid var(--line);background:var(--card);
+  font-size:22px;font-weight:700;cursor:pointer;color:var(--tx)}
+.keypad button:active{background:var(--bg2)}
+.keypad button.wide{font-size:14px;font-weight:700}
+.keypad button.face{color:var(--mint);border-color:var(--mint)}
+.keypad button.blank{border:none;background:none;cursor:default}
 </style>
 </head>
 <body>
+
+<!-- 暗証番号ロック。スマホ本体を人に触られてもノートを見られないための鍵。
+     サーバー不要。PINはSHA-256ハッシュで端末内に保存する（生の番号は保存しない）。 -->
+<div class="lockgate" id="lockgate" hidden>
+  <div class="lockbox">
+    <div class="lockmark">🔒</div>
+    <div class="locktitle" id="lock-title">暗証番号を入れる</div>
+    <div class="lockdots" id="lock-dots"></div>
+    <div class="lockmsg" id="lock-msg"></div>
+    <div class="keypad" id="keypad"></div>
+  </div>
+</div>
 
 <div class="wrap">
   <header class="top">
@@ -433,6 +477,21 @@ nav.tab button.on{color:var(--mint)}
     <div class="row" style="margin-top:10px"><button class="quiet" id="btn-ai-save">保存</button>
       <button class="quiet" id="btn-ai-test">接続テスト</button></div>
     <div id="ai-test"></div>
+
+    <h2 class="sec">🔒 画面ロック</h2>
+    <p class="lede">スマホを人に触られても、ノートを見られないようにする。番号はこの端末の中だけに（暗号化して）保存する。忘れると解除できないので注意。</p>
+    <div class="card flat" style="padding:6px 16px">
+      <label class="toggle"><span>暗証番号ロックを使う</span>
+        <input type="checkbox" id="lk-on" class="sw"></label>
+      <label class="toggle" id="lk-bio-row" hidden><span id="lk-bio-label">Face ID / 指紋でも開く</span>
+        <input type="checkbox" id="lk-bio" class="sw"></label>
+      <label class="toggle" id="lk-lock-row" hidden><span>アプリを閉じるたびロックする</span>
+        <input type="checkbox" id="lk-lock" class="sw"></label>
+    </div>
+    <div class="row" id="lk-change-row" style="margin-top:10px" hidden>
+      <button class="quiet" id="lk-change">暗証番号を変える</button>
+    </div>
+    <div id="lk-msg"></div>
 
     <h2 class="sec">💾 バックアップ</h2>
     <p class="lede">ノートはこのスマホの中にしか無い。機種変や履歴削除で消える。ときどき書き出して、自分にメールしておく。</p>
