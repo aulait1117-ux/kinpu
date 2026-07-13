@@ -1,7 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#16140f"/>
-  <!-- 円相（一筆書きの円）。企業道ブランドの核。 -->
-  <circle cx="32" cy="32" r="19" fill="none" stroke="#d6ab57" stroke-width="3.2"
-          stroke-linecap="round" stroke-dasharray="105 14" transform="rotate(-38 32 32)"/>
-  <circle cx="32" cy="32" r="4.6" fill="#8fb0a0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- ホーム画面アイコン：相棒（はちわれ猫）の顔。まるくてかわいい。 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDF3E2"/>
+      <stop offset="1" stop-color="#F0EBFB"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="27" fill="url(#bg)"/>
+  <!-- 猫耳 -->
+  <path d="M 36 46 L 32 26 L 50 40 Z" fill="#3f3a44" stroke="#4a403a" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M 84 46 L 88 26 L 70 40 Z" fill="#3f3a44" stroke="#4a403a" stroke-width="2.4" stroke-linejoin="round"/>
+  <!-- 顔 -->
+  <ellipse cx="60" cy="68" rx="39" ry="37" fill="#fff" stroke="#e7ddd0" stroke-width="2.4"/>
+  <!-- はちわれ模様 -->
+  <path d="M 21 62 Q 21 35 60 34 Q 99 35 99 62 Q 84 54 72 56 L 60 80 L 48 56 Q 36 54 21 62 Z" fill="#3f3a44"/>
+  <!-- 目 -->
+  <circle cx="46" cy="66" r="3.8" fill="#2b2730"/>
+  <circle cx="74" cy="66" r="3.8" fill="#2b2730"/>
+  <circle cx="47.4" cy="64.6" r="1.2" fill="#fff"/>
+  <circle cx="75.4" cy="64.6" r="1.2" fill="#fff"/>
+  <!-- ほっぺ -->
+  <ellipse cx="41" cy="76" rx="5" ry="3.2" fill="#f6b8bf" opacity="0.85"/>
+  <ellipse cx="79" cy="76" rx="5" ry="3.2" fill="#f6b8bf" opacity="0.85"/>
+  <!-- くち -->
+  <path d="M 55 75 Q 60 79 65 75" stroke="#4a403a" stroke-width="2" fill="none" stroke-linecap="round"/>
 </svg>

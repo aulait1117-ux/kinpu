@@ -1,14 +1,16 @@
 {
-  "name": "菌譜 — 抗菌薬耐性ノート",
-  "short_name": "菌譜",
-  "description": "菌ごとに、自分のノート・自然耐性・耐性が出たときの追加検査をまとめて引く。",
+  "name": "きんぷ｜細菌検査ノート",
+  "short_name": "きんぷ",
+  "description": "菌ごとに、自分のノート・自然耐性・耐性が出たときの追加検査をまとめて引く。育つ相棒つき。",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#16140f",
-  "theme_color": "#16140f",
+  "background_color": "#FDFBF8",
+  "theme_color": "#FDFBF8",
   "icons": [
-    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
   ]
 }

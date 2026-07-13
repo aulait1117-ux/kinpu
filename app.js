@@ -1294,19 +1294,83 @@ async function lockBio() {
 }
 
 /* ---------- 相棒きんぺい ---------- */
+let petTalkIdx = 0;
 function renderPet() {
   const s = Pet.state();
   const stage = Pet.stageOf(s.xp);
   const nx = Pet.next(s.xp);
-  $('#pet-fig').innerHTML = petSVG(stage.form, { size: 84 });
-  $('#pet-name').innerHTML = `${esc(Pet.getName())} <span class="lv">Lv.${stage.lv} ${esc(stage.name)}</span>`;
-  $('#pet-word').textContent = stage.word;
+  $('#pet-fig').innerHTML = petSVG(stage.form, { size: 84, species: Pet.curSpecies(), mood: Pet.mood() });
+  const named = Pet.hasName();
+  $('#pet-name').innerHTML = `${esc(Pet.getName())} <span class="pet-edit">✏️</span> <span class="lv">Lv.${stage.lv} ${esc(stage.name)}</span>`;
+  /* まだ名前をつけていない子には、つけてあげてね、と誘導する */
+  $('#pet-word').textContent = named ? stage.word : 'タップして なまえをつけてね';
+  $('#pet-word').style.color = named ? '' : 'var(--lav)';
   const pct = nx ? Math.min(100, Math.round(((s.xp - stage.need) / (nx.need - stage.need)) * 100)) : 100;
   $('#pet-bar').style.width = pct + '%';
-  $('#pet-meta').innerHTML = nx
-    ? `<span>つぎまで あと ${nx.need - s.xp}</span><span class="fire">🔥 ${s.streak}日れんぞく</span>`
-    : `<span>さいだいまで育った！</span><span class="fire">🔥 ${s.streak}日れんぞく</span>`;
+  const zoo = Object.keys(Pet.clearedList()).length;
+  $('#pet-meta').innerHTML = (nx
+    ? `<span>つぎまで あと ${nx.need - s.xp}</span>`
+    : `<span>さいだい！べつの子も育てられるよ</span>`)
+    + `<span class="fire">🔥 ${s.streak}日</span>`
+    + `<span>🎖️ ${zoo + 1}匹目</span>`;
 }
+/* ずかん：なかま（キャラ）と、集めたしょう */
+function renderPetZukan() {
+  const unlocked = Pet.unlocked();
+  const cleared = Pet.clearedList();
+  const cur = Pet.curSpecies();
+  const maxed = Pet.isMaxed();
+
+  const sp = $('#pet-species'); sp.innerHTML = '';
+  Pet.SPECIES.forEach((s) => {
+    const isUnlocked = unlocked.includes(s.id);
+    const isCleared = !!cleared[s.id];
+    const isCur = s.id === cur;
+    const c = el('div', 'card flat'); c.style.cssText = 'display:flex;align-items:center;gap:12px' + (isCur ? ';border-color:var(--mint)' : '');
+    if (isUnlocked) {
+      c.innerHTML = `<div style="flex:none">${petSVG(isCur ? Pet.stageOf(Pet.state().xp).form : 'adult', { size: 56, species: s.id })}</div>
+        <div style="flex:1"><b>${s.emoji} ${esc(s.label)}</b>
+          <div style="font-size:12px;color:var(--tx2)">性格：${esc(traitOf(s.id))}${isCleared ? ' ・ 🎓はかせ達成' : ''}${isCur ? ' ・ いま いっしょ' : ''}</div></div>`;
+      if (!isCur) {
+        const b = el('button', 'chip mint'); b.textContent = 'この子にする';
+        b.onclick = () => {
+          const msg = maxed
+            ? `いまの子を「はかせ」として ずかんに のこして、${s.label}を たまごから 育てる？`
+            : `いまの子（Lv.${Pet.stageOf(Pet.state().xp).lv}）は はかせに なる前だよ。それでも ${s.label}に かえる？（いまの子の育ちは リセットされる）`;
+          if (!confirm(msg)) return;
+          if (Pet.switchSpecies(s.id)) { renderPetZukan(); petToast(`${s.label}、よろしくね`); }
+        };
+        c.appendChild(b);
+      }
+    } else {
+      c.style.opacity = '0.55';
+      c.innerHTML = `<div style="flex:none;font-size:40px;filter:grayscale(1)">❓</div>
+        <div style="flex:1"><b>？？？</b>
+          <div style="font-size:12px;color:var(--tx2)">いまの子を「はかせ」まで育てると あらわれる</div></div>`;
+    }
+    sp.appendChild(c);
+  });
+
+  /* しょう（バッジ） */
+  const got = Pet.badges();
+  $('#pet-badge-n').textContent = `${Object.keys(got).length} / ${Pet.BADGES.length}`;
+  const bb = $('#pet-badges'); bb.innerHTML = '';
+  const grid = el('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px';
+  Pet.BADGES.forEach((bd) => {
+    const have = !!got[bd.id];
+    const d = el('div', 'card flat');
+    d.style.cssText = 'padding:12px' + (have ? '' : ';opacity:.5');
+    d.innerHTML = `<div style="font-size:24px">${have ? bd.emoji : '🔒'}</div>
+      <b style="font-size:13px">${esc(bd.name)}</b>
+      <div style="font-size:11.5px;color:var(--tx2)">${esc(bd.desc)}</div>`;
+    grid.appendChild(d);
+  });
+  bb.appendChild(grid);
+}
+function traitOf(id) {
+  return { cat: 'マイペース', rabbit: 'げんき', bear: 'のんびり', penguin: 'しっかりや' }[id] || '';
+}
+
 let petToastTimer = null;
 function petToast(msg, sub, opts = {}) {
   const t = $('#pet-toast');
@@ -1322,19 +1386,42 @@ function petToast(msg, sub, opts = {}) {
     setTimeout(() => { t.hidden = true; }, 350);
   }, opts.levelup ? 3200 : 1800);
 }
-/* 行動を記録し、育ったら祝う。画面が忙しくならないよう、経験値が入ったときだけ出す。 */
+/* 行動を記録し、育ったら祝う。バッジ（しょう）も確認する。 */
 function petAct(kind) {
   if (typeof Pet === 'undefined') return;
+  if (kind === 'view_org' && curOrg) Pet.seeOrg(curOrg.id);   // 図鑑カウント（重複なし）
   const r = Pet.act(kind);
-  if (!r || !r.gained) return;
-  if (r.leveledTo) {
-    Pet.markSeen(r.leveledTo.lv);
-    petToast(`${Pet.getName()}が そだった！`, `Lv.${r.leveledTo.lv} ${r.leveledTo.name}・${r.leveledTo.word}`, { levelup: true });
-  } else {
-    petToast(`${r.msg}（+${r.gained}）`);
+
+  /* しょうの達成チェック（経験値が入らなくても、条件を満たしたら出す） */
+  const stats = {
+    notes: notes.length,
+    verified: Object.keys(verified).length,
+    flowUsed: kind === 'flow' || undefined,
+    aiUsed: kind === 'ai' || undefined,
+  };
+  const newBadges = Pet.checkBadges(stats);
+
+  if (r && r.gained) {
+    if (r.leveledTo) {
+      Pet.markSeen(r.leveledTo.lv);
+      petToast(`${Pet.getName()}が そだった！`, `Lv.${r.leveledTo.lv} ${r.leveledTo.name}・${r.leveledTo.word}`, { levelup: true });
+    } else {
+      petToast(`${r.msg}（+${r.gained}）`);
+    }
   }
-  if (!$('#sc-home').classList.contains('on')) return;
-  renderPet();
+  /* バッジは少し遅らせて、行動トーストの後に出す */
+  newBadges.forEach((bd, i) => setTimeout(() => petToast(`しょう「${bd.name}」ゲット！`, bd.desc, { levelup: true }), 1200 * (i + 1)));
+
+  if ($('#sc-home').classList.contains('on')) renderPet();
+}
+/* キャラをなでる：跳ねて、性格に合わせた一言をしゃべる */
+function petPat() {
+  const fig = $('#pet-fig');
+  fig.classList.remove('pet-celebrate'); void fig.offsetWidth; fig.classList.add('pet-celebrate');
+  petTalkIdx++;
+  const m = Pet.mood();
+  const line = Pet.talk(petTalkIdx, m === 'lonely' ? 'lonely' : null);
+  petToast(line);
 }
 
 /* ---------- テーマ ---------- */
@@ -1347,7 +1434,7 @@ function applyTheme() {
 /* ---------- ルーティング ---------- */
 const SCREENS = { home: 'sc-home', orgs: 'sc-orgs', org: 'sc-org', flow: 'sc-flow', drugs: 'sc-drugs',
   mechs: 'sc-mechs', mech: 'sc-mech', notes: 'sc-notes', note: 'sc-view', edit: 'sc-edit',
-  set: 'sc-set', help: 'sc-help', report: 'sc-report', daily: 'sc-daily' };
+  set: 'sc-set', help: 'sc-help', report: 'sc-report', daily: 'sc-daily', pet: 'sc-pet' };
 
 function route() {
   const h = location.hash || '#/home';
@@ -1366,7 +1453,7 @@ function route() {
 
   $('#btn-back').hidden = ['home', 'orgs', 'drugs', 'mechs', 'notes'].includes(part);
   $('#fab').hidden = !['home', 'notes'].includes(part);
-  const tabOf = { home: 'home', help: 'home', set: 'home', report: 'home', daily: 'home',
+  const tabOf = { home: 'home', help: 'home', set: 'home', report: 'home', daily: 'home', pet: 'home',
     orgs: 'orgs', org: 'orgs', flow: 'flow',
     drugs: 'drugs', mechs: 'mechs', mech: 'mechs', notes: 'notes', note: 'notes', edit: 'notes' };
   document.querySelectorAll('nav.tab button').forEach((b) => b.classList.toggle('on', b.dataset.go === tabOf[part]));
@@ -1384,6 +1471,7 @@ function route() {
   else if (part === 'set') renderSet();
   else if (part === 'report') renderReport();
   else if (part === 'daily') { $('#dl-out').innerHTML = ''; }
+  else if (part === 'pet') renderPetZukan();
 }
 
 /* ---------- 配線 ---------- */
@@ -1392,15 +1480,17 @@ $('#btn-back').onclick = () => history.back();
 $('#btn-set').onclick = () => (location.hash = '#/set');
 $('#btn-search').onclick = openPal;
 $('#home-search').onclick = openPal;
-/* きんぺいをタップ：名前をつける／変える。少しだけ喜ぶ。 */
-$('#pet-widget').onclick = () => {
-  const cur = Pet.getName();
+/* キャラをなでる → しゃべる。名前をタップ → 改名。ずかんボタン → コレクション。 */
+$('#pet-fig').onclick = petPat;
+$('#pet-name').onclick = () => {
+  const cur = Pet.hasName() ? Pet.getName() : '';
   const n = prompt('この子の名前をつけてあげて（12文字まで）', cur);
   if (n === null) return;
   Pet.setName(n);
   renderPet();
-  petToast(`${Pet.getName()}、よろしくね`);
+  if (Pet.hasName()) petToast(`${Pet.getName()}、よろしくね`);
 };
+$('#pet-zukan').onclick = () => (location.hash = '#/pet');
 $('#go-help').onclick = () => (location.hash = '#/help');
 $('#go-report').onclick = () => (location.hash = '#/report');
 $('#go-daily').onclick = () => (location.hash = '#/daily');
@@ -1516,6 +1606,12 @@ function boot() {
 boot();
 applyTheme();
 route();
+
+/* 起動演出を少し見せてから消す（初回の1回だけ・戻る操作では出さない） */
+(() => {
+  const sp = $('#splash'); if (!sp) return;
+  setTimeout(() => { sp.classList.add('hide'); setTimeout(() => sp.remove(), 600); }, 1500);
+})();
 
 /* ロックが有効なら、起動時に解錠を求める（画面はz-indexで覆う） */
 if (Lock.isOn()) showLock('unlock');
