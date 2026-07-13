@@ -22,7 +22,8 @@ let verified = load(LS.verified, {});
 let sirState = load(LS.sir, {});
 let recent = load(LS.recent, []);
 let favs = load(LS.fav, []);
-let aiUrl = load(LS.ai, '');
+/* AI整理サーバー。知人が設定しなくても使えるよう既定値を入れる（設定画面で差し替え可） */
+let aiUrl = load(LS.ai, 'https://kinpu-ai.aulait11-17.workers.dev');
 
 /* ノートの種類。これ1本で SOP・トラブル・症例・機器・申し送り まで面倒を見る。
  * 新しい分類が要るならここに1行足すだけ。 */

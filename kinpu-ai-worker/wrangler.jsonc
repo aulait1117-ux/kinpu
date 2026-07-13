@@ -2,8 +2,11 @@
   "name": "kinpu-ai",
   "main": "worker.js",
   "compatibility_date": "2026-07-13",
+  "kv_namespaces": [
+    { "binding": "KINPU_KV", "id": "8ffa1a42e063478fb1e7cf59a99f66cd" }
+  ],
   "vars": {
     "ALLOW_ORIGIN": "https://aulait1117-ux.github.io",
-    "DAILY_LIMIT": "200"
+    "DAILY_LIMIT": "50"
   }
 }
