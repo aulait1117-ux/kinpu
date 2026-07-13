@@ -8,7 +8,7 @@
  *  - AI整理（/organize）だけは絶対にキャッシュしない。オフラインなら素直に失敗させる。
  */
 
-const CACHE = 'kinpu-v4';
+const CACHE = 'kinpu-v5';
 const SHELL = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const SHELL = [
   './drugs.js',
   './mechanisms.js',
   './details.js',
+  './flowdata.js',
   './favicon.svg',
   './manifest.webmanifest',
 ];

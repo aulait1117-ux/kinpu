@@ -287,6 +287,15 @@ nav.tab button.on{color:var(--mint)}
         <span style="color:var(--tx3)">›</span></div>
     </button>
 
+    <div class="row" style="margin-top:12px;gap:8px">
+      <button class="card" id="go-report" style="flex:1;min-width:0;text-align:center;padding:14px 8px">
+        <div style="font-size:20px">📞</div><b style="font-size:13px">電話報告</b>
+        <small style="display:block;color:var(--tx3);font-size:10.5px">読み上げ用テンプレ</small></button>
+      <button class="card" id="go-daily" style="flex:1;min-width:0;text-align:center;padding:14px 8px">
+        <div style="font-size:20px">📓</div><b style="font-size:13px">今日の日報</b>
+        <small style="display:block;color:var(--tx3);font-size:10.5px">AIがまとめる</small></button>
+    </div>
+
     <h2 class="sec">📖 最近見たもの</h2>
     <div id="h-recent"></div>
     <h2 class="sec">⭐ お気に入り</h2>
@@ -311,6 +320,17 @@ nav.tab button.on{color:var(--mint)}
     <div class="hero" id="od-hero"></div>
     <div class="quick" id="od-quick"></div>
     <div id="od-body"></div>
+  </section>
+
+  <!-- ===== 同定フロー ===== -->
+  <section class="screen" id="sc-flow">
+    <div class="hero" style="margin-bottom:6px">
+      <span class="jp" style="font-size:19px">🔬 グラム染色から菌を絞る</span>
+      <p style="margin:6px 0 0;font-size:13px;color:var(--tx2)">見えたもの・調べた結果をタップすると、候補が絞れます。<b>確定ではありません。</b>最後は詳細ページと自施設の同定手順で確認を。</p>
+    </div>
+    <div id="flow-chosen"></div>
+    <div id="flow-q"></div>
+    <div id="flow-cand"></div>
   </section>
 
   <!-- ===== 抗菌薬DB ===== -->
@@ -460,6 +480,44 @@ nav.tab button.on{color:var(--mint)}
     </div>
   </section>
 
+  <!-- ===== 電話報告テンプレ（保存しない） ===== -->
+  <section class="screen" id="sc-report">
+    <div class="blk alert" style="margin-top:6px">
+      <h3>📞 電話報告テンプレ</h3>
+      <p style="font-size:13px">危険値・緊急報告を電話するとき、抜けなく伝えるための下書き。
+        <b>ここに入れた内容は保存されない。</b>この画面を離れると消える。患者情報を扱うので、端末にもサーバーにも残さない設計。</p>
+    </div>
+    <label class="fld"><span>報告先（例：内科 ○○先生）</span><input type="text" class="rp" id="rp-to"></label>
+    <label class="fld"><span>検体（例：血液培養 2セット中2セット陽性）</span><input type="text" class="rp" id="rp-spec"></label>
+    <label class="fld"><span>菌種・所見（例：グラム陽性球菌 クラスター）</span><input type="text" class="rp" id="rp-org"></label>
+    <label class="fld"><span>耐性・届出（例：MRSA、mecA確認予定）</span><input type="text" class="rp" id="rp-res"></label>
+    <label class="fld"><span>報告者（あなたの名前）</span><input type="text" class="rp" id="rp-by"></label>
+    <label class="fld"><span>その他・補足</span><input type="text" class="rp" id="rp-note"></label>
+
+    <h2 class="sec">読み上げ用の下書き</h2>
+    <div class="blk" id="rp-out" style="white-space:pre-wrap;font-size:14px;line-height:1.9"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="act" id="rp-copy">📋 コピー</button>
+      <button class="quiet" id="rp-clear">消す</button>
+    </div>
+    <div class="blk tip" style="margin-top:14px">
+      <h3>💡 復唱確認を忘れずに</h3>
+      <p style="font-size:13px">相手に復唱してもらい、報告した時刻を記録する。危険値報告は「誰に・いつ・何を・復唱確認したか」まで残すのが基本。</p>
+    </div>
+  </section>
+
+  <!-- ===== AI日報 ===== -->
+  <section class="screen" id="sc-daily">
+    <div class="hero" style="margin-bottom:6px">
+      <span class="jp" style="font-size:19px">📓 今日の日報</span>
+      <p style="margin:6px 0 0;font-size:13px;color:var(--tx2)">今日書いたノートから、AIが日報の下書きをつくる。振り返りに。</p>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <button class="act ai" id="dl-make">✨ 今日の日報をつくる</button>
+    </div>
+    <div id="dl-out"></div>
+  </section>
+
   <!-- ===== 設定 ===== -->
   <section class="screen" id="sc-set">
     <h2 class="sec">📦 保存されているもの</h2>
@@ -517,6 +575,7 @@ nav.tab button.on{color:var(--mint)}
 <nav class="tab">
   <button data-go="home" class="on"><span class="e">🏠</span>ホーム</button>
   <button data-go="orgs"><span class="e">🦠</span>菌</button>
+  <button data-go="flow"><span class="e">🔬</span>同定</button>
   <button data-go="drugs"><span class="e">💊</span>抗菌薬</button>
   <button data-go="mechs"><span class="e">🧬</span>耐性機序</button>
   <button data-go="notes"><span class="e">📝</span>ノート</button>
@@ -533,6 +592,7 @@ nav.tab button.on{color:var(--mint)}
 <script src="drugs.js"></script>
 <script src="mechanisms.js"></script>
 <script src="details.js"></script>
+<script src="flowdata.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -520,6 +520,114 @@ function renderMech(id) {
   }
 }
 
+/* ---------- 同定フロー ----------
+ * グラム性状・形態は DETAILS から、鑑別検査は FLOW_TAGS から取る。
+ * フィルタは「その所見の値を持たない菌は除外しない」。だから候補が空になりにくく、
+ * タグの付け忘れが誤除外にならない。あくまで“絞る”ための道具。 */
+let flowAns = {};
+const gramBucket = (g) => {
+  g = g || '';
+  if (g.includes('陽性')) return '陽性';
+  if (g.includes('陰性')) return '陰性';
+  if (g.includes('抗酸')) return '抗酸菌';
+  if (g.includes('真菌')) return '真菌';
+  return 'その他';
+};
+const shapeBucket = (s) => {
+  s = s || '';
+  if (s.includes('球桿')) return '球桿菌';
+  if (s.includes('球')) return '球菌';
+  if (s.includes('らせん') || s.includes('湾曲')) return 'らせん菌';
+  if (s.includes('酵母')) return '酵母';
+  if (s.includes('糸状')) return '糸状菌';
+  if (s.includes('桿')) return '桿菌';
+  return 'その他';
+};
+function flowValue(o, key) {
+  const d = detOf(o.id), t = FLOW_TAGS[o.id] || {};
+  if (key === 'gram') return gramBucket(d.g);
+  if (key === 'shape') return shapeBucket(d.s);
+  return t[key];   // undefined なら「この検査では絞れない」＝除外しない
+}
+function flowCandidates() {
+  return ORGANISMS.filter((o) =>
+    Object.entries(flowAns).every(([k, v]) => {
+      if (v === '__skip__') return true;   // 「わからない」は絞り込みに使わない
+      const ov = flowValue(o, k);
+      return ov == null || ov === v;       // 値を持たない菌は残す
+    })
+  );
+}
+function renderFlow() {
+  const cand = flowCandidates();
+
+  /* いま選んだ条件（外せる） */
+  const ch = $('#flow-chosen'); ch.innerHTML = '';
+  const steps = FLOW_STEPS;
+  Object.keys(flowAns).forEach((k) => {
+    const st = steps.find((s) => s.key === k);
+    const opt = st && st.options.find((o) => o.v === flowAns[k]);
+    const c = el('button', 'chip mint');
+    c.textContent = (opt ? opt.label : `${k}:${flowAns[k]}`) + ' ✕';
+    c.onclick = () => { delete flowAns[k]; renderFlow(); };
+    ch.appendChild(c);
+  });
+  if (Object.keys(flowAns).length) {
+    const rs = el('button', 'chip grey'); rs.textContent = 'ぜんぶ消す';
+    rs.onclick = () => { flowAns = {}; renderFlow(); };
+    ch.appendChild(rs);
+  }
+
+  /* 次に聞く質問：未回答で、候補が2通り以上の値を持つ最初のステップ */
+  const qbox = $('#flow-q'); qbox.innerHTML = '';
+  const next = steps.find((st) => {
+    if (flowAns[st.key] != null) return false;
+    const vals = new Set(cand.map((o) => flowValue(o, st.key)).filter((v) => v != null));
+    return vals.size >= 2 || (st.key === 'gram' && !Object.keys(flowAns).length);
+  });
+  if (next) {
+    const card = el('div', 'blk');
+    card.innerHTML = `<h3>${esc(next.label)}</h3>`;
+    const row = el('div', 'row'); row.style.marginTop = '4px';
+    next.options.forEach((opt) => {
+      /* その選択で候補が残るものだけ出す（0件になる選択肢は見せない） */
+      if (cand.length && !cand.some((o) => flowValue(o, next.key) === opt.v)) return;
+      const b = el('button', 'quiet'); b.textContent = opt.label;
+      b.onclick = () => { flowAns[next.key] = opt.v; renderFlow(); };
+      row.appendChild(b);
+    });
+    const skip = el('button', 'chip grey'); skip.textContent = 'わからない / 次へ';
+    skip.style.alignSelf = 'center';
+    skip.onclick = () => { flowAns[next.key] = '__skip__'; renderFlow(); };
+    card.appendChild(row); card.appendChild(skip);
+    qbox.appendChild(card);
+  }
+
+  /* 候補一覧 */
+  const cb = $('#flow-cand'); cb.innerHTML = '';
+  const h = el('h2', 'sec');
+  h.innerHTML = `候補の菌 <span class="n">${cand.length}</span>`;
+  cb.appendChild(h);
+  if (!cand.length) {
+    cb.insertAdjacentHTML('beforeend', '<p class="empty">条件に合う菌が無い。ひとつ前の条件を外すか、菌タブで直接検索する。</p>');
+    return;
+  }
+  if (cand.length > 20 && Object.keys(flowAns).length < 2) {
+    cb.insertAdjacentHTML('beforeend', '<p class="lede">まず「グラム染色」と「形」を選ぶと一気に絞れる。</p>');
+  }
+  cand.slice(0, 40).forEach((o) => {
+    const d = detOf(o.id), t = FLOW_TAGS[o.id] || {};
+    const tone = d.g && d.g.includes('陽性') ? 'pos' : d.g && d.g.includes('陰性') ? 'neg' : '';
+    const c = el('button', 'card ocard ' + tone);
+    const clues = (t.special || []).slice(0, 3).map((s) => `<span class="chip grey">${esc(s)}</span>`).join('');
+    c.innerHTML = `<span class="jp">${esc(o.jp)}</span> <span class="sci">${esc(o.name)}</span>
+      ${d.dis ? `<div class="dis">${esc(d.dis.slice(0, 2).join('・'))}</div>` : ''}
+      ${clues ? `<div class="chips" style="margin-top:6px">${clues}</div>` : ''}`;
+    c.onclick = () => (location.hash = hrefOf('org', o.id));
+    cb.appendChild(c);
+  });
+}
+
 /* ---------- 検索 ---------- */
 const norm = (s) => String(s || '').toLowerCase().normalize('NFKC');
 function noteText(n) {
@@ -763,10 +871,94 @@ function drawLinks() {
 function drawThumbs() {
   const b = $('#e-thumbs'); b.innerHTML = '';
   editPhotos.forEach((p, i) => {
+    const wrap = el('div'); wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;align-items:center';
     const im = el('img'); im.src = p.dataUrl; im.title = 'タップで削除';
     im.onclick = () => { if (confirm('この写真を消す？')) { editPhotos.splice(i, 1); drawThumbs(); } };
-    b.appendChild(im);
+    wrap.appendChild(im);
+    /* 写真をAIに説明してもらう（グラム染色・コロニーの学習用） */
+    const btn = el('button', 'chip lav'); btn.textContent = '👀 AI説明';
+    btn.style.cssText = 'border:none;cursor:pointer;font-size:10.5px';
+    btn.onclick = () => describePhoto(i);
+    wrap.appendChild(btn);
+    b.appendChild(wrap);
   });
+}
+async function describePhoto(i) {
+  const p = editPhotos[i]; if (!p) return;
+  if (!aiUrl) { $('#ai-out').innerHTML = '<div class="aibox">AIサーバーが未設定。⚙️設定 から。</div>'; return; }
+  $('#ai-out').innerHTML = '<div class="aibox">👀 写真を見ています…</div>';
+  try {
+    const res = await fetch(aiUrl.replace(/\/$/, '') + '/describe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images: [p.dataUrl] }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    const sec = (t, a) => (a && a.length) ? `<h3 style="margin-top:8px">${t}</h3><ul>${a.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+    $('#ai-out').innerHTML = `<div class="blk"><h3>👀 この写真（${esc(d.kind || '不明')}）</h3>
+      ${sec('見える所見', d.findings)}${sec('矛盾しない候補', d.suspect)}${sec('次に確認する検査', d.next)}
+      ${d.caution ? `<div class="blk alert" style="margin-top:8px"><p>${esc(d.caution)}</p></div>` : ''}
+      <p style="margin-top:8px;font-size:11.5px;color:var(--tx3)">※ 学習の助け。菌名は断定していない。最終判断は自分と施設の同定手順で。</p></div>`;
+    /* この説明を写真のキャプションとして保存できるようにしておく */
+    p.caption = [d.kind, (d.findings || []).join('、')].filter(Boolean).join('：');
+  } catch (e) {
+    $('#ai-out').innerHTML = `<div class="aibox">うまくいかなかった（${esc(e.message)}）</div>`;
+  }
+}
+
+/* ---------- 電話報告テンプレ（保存しない） ---------- */
+function renderReport() {
+  document.querySelectorAll('.rp').forEach((inp) => { inp.oninput = buildReport; });
+  buildReport();
+}
+function buildReport() {
+  const v = (id) => ($('#' + id).value || '').trim();
+  const lines = [];
+  if (v('rp-to')) lines.push(`【報告先】${v('rp-to')}`);
+  if (v('rp-spec')) lines.push(`【検体】${v('rp-spec')}`);
+  if (v('rp-org')) lines.push(`【菌種・所見】${v('rp-org')}`);
+  if (v('rp-res')) lines.push(`【耐性・届出】${v('rp-res')}`);
+  if (v('rp-note')) lines.push(`【補足】${v('rp-note')}`);
+  if (v('rp-by')) lines.push(`【報告者】${v('rp-by')}`);
+  lines.push('【復唱確認】済 ／ 【報告時刻】___:___');
+  $('#rp-out').textContent = lines.join('\n');
+}
+function clearReport() {
+  document.querySelectorAll('.rp').forEach((inp) => { inp.value = ''; });
+  buildReport();
+}
+
+/* ---------- AI日報 ---------- */
+async function makeDaily() {
+  if (!aiUrl) { $('#dl-out').innerHTML = '<div class="aibox">AIサーバーが未設定。⚙️設定 から。</div>'; return; }
+  /* 今日（この端末の0時以降）に更新されたノートだけ渡す */
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const today = notes.filter((n) => n.updatedAt >= start.getTime());
+  if (!today.length) { $('#dl-out').innerHTML = '<p class="empty">今日はまだノートが無い。ノートを書くと日報がつくれる。</p>'; return; }
+  $('#dl-out').innerHTML = '<div class="aibox">✨ 今日のノートから日報をつくっています…</div>';
+  try {
+    const res = await fetch(aiUrl.replace(/\/$/, '') + '/daily', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: today.map((n) => ({ kind: kindOf(n.kind).jp, title: n.title, body: n.body })) }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    const sec = (t, a) => (a && a.length) ? `<h3 style="margin-top:10px">${t}</h3><ul>${a.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+    $('#dl-out').innerHTML = `<div class="blk">
+      ${d.oneline ? `<p style="font-size:15px"><b>✨ ${esc(d.oneline)}</b></p>` : ''}
+      ${sec('本日やったこと', d.done)}${sec('学んだこと', d.learned)}
+      ${sec('トラブルと対応', d.troubles)}${sec('明日やること', d.tomorrow)}
+      <p style="margin-top:10px;font-size:11.5px;color:var(--tx3)">今日のノート${today.length}件から。ノートに書いたことだけをまとめている。</p></div>
+      <div class="row" style="margin-top:10px"><button class="quiet" id="dl-copy">📋 コピー</button></div>`;
+    $('#dl-copy').onclick = () => {
+      const txt = $('#dl-out .blk').innerText;
+      navigator.clipboard?.writeText(txt).then(() => { $('#dl-copy').textContent = '✓ コピーした'; });
+    };
+  } catch (e) {
+    $('#dl-out').innerHTML = `<div class="aibox">うまくいかなかった（${esc(e.message)}）</div>`;
+  }
 }
 /* AIが配列を返すはずのところに文字列を返しても、画面を壊さない。
  * サーバー側でも矯正しているが、外部の返り値は二重に疑う。 */
@@ -1097,9 +1289,9 @@ function applyTheme() {
 }
 
 /* ---------- ルーティング ---------- */
-const SCREENS = { home: 'sc-home', orgs: 'sc-orgs', org: 'sc-org', drugs: 'sc-drugs',
+const SCREENS = { home: 'sc-home', orgs: 'sc-orgs', org: 'sc-org', flow: 'sc-flow', drugs: 'sc-drugs',
   mechs: 'sc-mechs', mech: 'sc-mech', notes: 'sc-notes', note: 'sc-view', edit: 'sc-edit',
-  set: 'sc-set', help: 'sc-help' };
+  set: 'sc-set', help: 'sc-help', report: 'sc-report', daily: 'sc-daily' };
 
 function route() {
   const h = location.hash || '#/home';
@@ -1107,18 +1299,22 @@ function route() {
   const part = parts[0] || 'home';
   const arg = parts.slice(1).join('/');
   const sc = SCREENS[part] || 'sc-home';
+  /* 電話報告テンプレを離れたら、入力を消す（患者情報を端末に残さない約束） */
+  if (part !== 'report') document.querySelectorAll('.rp').forEach((inp) => { inp.value = ''; });
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === sc));
   window.scrollTo(0, 0);
 
   $('#btn-back').hidden = ['home', 'orgs', 'drugs', 'mechs', 'notes'].includes(part);
   $('#fab').hidden = !['home', 'notes'].includes(part);
-  const tabOf = { home: 'home', help: 'home', set: 'home', orgs: 'orgs', org: 'orgs',
+  const tabOf = { home: 'home', help: 'home', set: 'home', report: 'home', daily: 'home',
+    orgs: 'orgs', org: 'orgs', flow: 'flow',
     drugs: 'drugs', mechs: 'mechs', mech: 'mechs', notes: 'notes', note: 'notes', edit: 'notes' };
   document.querySelectorAll('nav.tab button').forEach((b) => b.classList.toggle('on', b.dataset.go === tabOf[part]));
 
   if (part === 'home') renderHome();
   else if (part === 'orgs') renderOrgs();
   else if (part === 'org') renderOrg(arg);
+  else if (part === 'flow') renderFlow();
   else if (part === 'drugs') renderDrugs();
   else if (part === 'mechs') renderMechs();
   else if (part === 'mech') renderMech(arg);
@@ -1126,6 +1322,8 @@ function route() {
   else if (part === 'note') renderView(arg);
   else if (part === 'edit') openEdit(arg);
   else if (part === 'set') renderSet();
+  else if (part === 'report') renderReport();
+  else if (part === 'daily') { $('#dl-out').innerHTML = ''; }
 }
 
 /* ---------- 配線 ---------- */
@@ -1135,6 +1333,11 @@ $('#btn-set').onclick = () => (location.hash = '#/set');
 $('#btn-search').onclick = openPal;
 $('#home-search').onclick = openPal;
 $('#go-help').onclick = () => (location.hash = '#/help');
+$('#go-report').onclick = () => (location.hash = '#/report');
+$('#go-daily').onclick = () => (location.hash = '#/daily');
+$('#rp-copy').onclick = () => { navigator.clipboard?.writeText($('#rp-out').textContent).then(() => { $('#rp-copy').textContent = '✓ コピーした'; setTimeout(() => $('#rp-copy').textContent = '📋 コピー', 1500); }); };
+$('#rp-clear').onclick = clearReport;
+$('#dl-make').onclick = makeDaily;
 $('#btn-theme').onclick = () => {
   save(LS.theme, load(LS.theme, 'light') === 'dark' ? 'light' : 'dark');
   applyTheme();
