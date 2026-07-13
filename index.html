@@ -214,14 +214,14 @@ nav.tab button.on{color:var(--mint)}
   transition:opacity .5s ease}
 .splash.hide{opacity:0;pointer-events:none}
 .splash .ensou{stroke-dasharray:245 400;stroke-dashoffset:245;
-  animation:draw 1s ease forwards}
+  animation:draw 1.4s cubic-bezier(.4,0,.2,1) forwards}
 @keyframes draw{to{stroke-dashoffset:0}}
-.splash-dot{opacity:0;animation:dotin .4s ease .8s forwards}
+.splash-dot{opacity:0;animation:dotin .5s ease 1.2s forwards}
 @keyframes dotin{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:scale(1)}}
 .splash-word{font-family:var(--fnt);font-weight:700;font-size:24px;letter-spacing:.14em;
-  opacity:0;animation:wordin .5s ease .9s forwards;margin-top:8px}
+  opacity:0;animation:wordin .6s ease 1.35s forwards;margin-top:8px}
 .splash-sub{font-family:var(--fnt2);font-size:12px;color:var(--tx3);letter-spacing:.2em;
-  opacity:0;animation:wordin .5s ease 1.1s forwards}
+  opacity:0;animation:wordin .6s ease 1.6s forwards}
 @keyframes wordin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 @media (prefers-reduced-motion: reduce){
   .splash .ensou,.splash-dot,.splash-word,.splash-sub{animation:none;opacity:1;stroke-dashoffset:0}

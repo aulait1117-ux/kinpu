@@ -1620,7 +1620,8 @@ route();
     renderPet();
   };
   if (!sp) { after(); return; }
-  setTimeout(() => { sp.classList.add('hide'); setTimeout(() => { sp.remove(); after(); }, 600); }, 1500);
+  /* 円相を描き終えて（〜1.3s）、名前とロゴが出てから、少し余韻を置いて消える */
+  setTimeout(() => { sp.classList.add('hide'); setTimeout(() => { sp.remove(); after(); }, 700); }, 2600);
 })();
 
 /* ロックが有効なら、起動時に解錠を求める（画面はz-indexで覆う） */
