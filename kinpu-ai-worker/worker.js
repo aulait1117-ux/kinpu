@@ -98,21 +98,37 @@ export default {
     if (url.pathname === '/health') return json({ ok: true, model: MODEL }, env);
     if (url.pathname !== '/organize' || req.method !== 'POST') return json({ error: 'not found' }, env, 404);
 
+    /* CORSはブラウザにしか効かない。curl等の素の呼び出しには Origin / Referer で軽く蓋をする。
+     * 本物の認証ではない（偽装は可能）。あくまで通りすがりの自動スキャンとお試し叩きを減らす一段。
+     * 最後の砦は下の1日上限（KV）。 */
+    const allow = env.ALLOW_ORIGIN || 'https://aulait1117-ux.github.io';
+    const origin = req.headers.get('origin') || '';
+    const referer = req.headers.get('referer') || '';
+    const fromApp = origin === allow || referer.startsWith(allow);
+    if (!fromApp) return json({ error: 'not allowed' }, env, 403);
+
     if (!env.ANTHROPIC_API_KEY) return json({ error: 'APIキーが未設定' }, env, 500);
     if (await overLimit(env)) return json({ error: '今日の上限に達しました。明日また使えます。' }, env, 429);
+
+    /* リクエスト全体の上限。写真4枚×約2MB＋テキストを見込んで12MBで頭打ち。
+     * これが無いと、巨大bodyでメモリと対Anthropic転送を食える（コスト増幅の穴）。 */
+    const clen = Number(req.headers.get('content-length') || 0);
+    if (clen && clen > 12_000_000) return json({ error: 'データが大きすぎます' }, env, 413);
 
     let body;
     try { body = await req.json(); } catch { return json({ error: '読めない入力' }, env, 400); }
 
     const text = String(body.text || '').slice(0, 8000);
-    const images = (body.images || []).slice(0, 4);
+    const images = Array.isArray(body.images) ? body.images.slice(0, 4) : [];
     if (!text && !images.length) return json({ error: '中身が空' }, env, 400);
 
     const content = [];
+    let imgBudget = 8_000_000;   // 画像の合計（base64長）上限。1枚ずつではなく総量で締める
     for (const d of images) {
-      const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/.exec(String(d));
+      const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(String(d));
       if (!m) continue;
-      if (m[2].length > 5_000_000) continue;   // 5MB相当を超える画像は捨てる
+      if (m[2].length > imgBudget) continue;
+      imgBudget -= m[2].length;
       content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
     }
     const list = (a, f) => (a || []).slice(0, 200).map(f).join('\n');
