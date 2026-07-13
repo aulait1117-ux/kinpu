@@ -9,14 +9,14 @@ const Pet = (() => {
   const load = () => { try { return JSON.parse(localStorage.getItem(LS_PET)) || {}; } catch { return {}; } };
   const save = (p) => { try { localStorage.setItem(LS_PET, JSON.stringify(p)); } catch {} };
 
-  /* 成長段階。必要経験値としきい値。 */
+  /* 成長段階。必要経験値としきい値。じっくり育つよう、しきい値は高めに設定。 */
   const STAGES = [
-    { lv: 1, need: 0,   name: 'たまご',   form: 'egg',   word: 'よろしくね' },
-    { lv: 2, need: 30,  name: 'ふわ',     form: 'baby',  word: 'いっしょにがんばろ' },
-    { lv: 3, need: 90,  name: 'もこ',     form: 'child', word: 'きょうも えらい' },
-    { lv: 4, need: 200, name: 'けんさ見習い', form: 'teen', word: 'だいぶ わかってきた' },
-    { lv: 5, need: 380, name: 'いちにんまえ', form: 'adult', word: 'たよりに してるよ' },
-    { lv: 6, need: 650, name: 'はかせ',   form: 'master', word: 'きみは もう ベテランだね' },
+    { lv: 1, need: 0,    name: 'たまご',   form: 'egg',   word: 'よろしくね' },
+    { lv: 2, need: 60,   name: 'ふわ',     form: 'baby',  word: 'いっしょにがんばろ' },
+    { lv: 3, need: 180,  name: 'もこ',     form: 'child', word: 'きょうも えらい' },
+    { lv: 4, need: 420,  name: 'けんさ見習い', form: 'teen', word: 'だいぶ わかってきた' },
+    { lv: 5, need: 820,  name: 'いちにんまえ', form: 'adult', word: 'たよりに してるよ' },
+    { lv: 6, need: 1400, name: 'はかせ',   form: 'master', word: 'きみは もう ベテランだね' },
   ];
 
   /* 行動ごとの経験値。1日に同じ行動で稼げる上限をつけて、狂ったように増えないようにする。 */
@@ -136,15 +136,56 @@ const Pet = (() => {
       levelup: ['成長 記録 更新です', 'つよく なりました きりっ', 'レベルアップ 確認しました'],
       lonely: ['おそかったですね', 'まっていました', 'ちゃんと きてくれて よかった'],
     },
+    boss: {   // 荒川さん本人。ゆるくてクール、口癖まみれ（隠しキャラ）
+      trait: 'ゆるクール',
+      lines: ['どした？', 'ひま、、', '俺はずっとニートｗｗ', 'かねほしいなぁｗｗ',
+        'ラテが ベットで うんこしたんだけどぉ', 'お、やってるね', 'えらいじゃん', 'むりすんなよ',
+        'ちゃんと 確認したか？', 'コーヒー でも のむ？', 'ま、なんとかなるって', 'まかせた',
+        'つぎ いこう つぎ', 'ちゃんと 寝てるか？', 'また 育っちゃったか', 'さすが だな',
+        '今日も おつかれさま', 'ひま すぎて 菌譜 つくったわｗ', 'かね ほしい……（真顔）',
+        'きみの ペースで いいよ', 'こまったら 呼んで', 'ラテ〜 どこいった〜'],
+      levelup: ['お、でかくなったな', 'いい成長 じゃん', 'たいしたもんだ ｗ'],
+      lonely: ['どした？ ひさしぶり', 'ひまだった？ 俺も', 'おかえりｗ'],
+    },
   };
+  /* 時間帯で変わる仕事応援コメント。定時(17:30想定)までの残りも入れる。キャラ別に言い方が変わる。 */
+  function cheer(hour, spOverride) {
+    const h = (typeof hour === 'number') ? hour : new Date().getHours();
+    const toEnd = Math.max(0, 17 - h);   // だいたい定時(17時台)まで
+    const sp = spOverride || curSpecies();
+    const band = h < 6 ? 'night' : h < 9 ? 'morning' : h < 12 ? 'am' : h < 14 ? 'noon' : h < 17 ? 'pm' : h < 21 ? 'evening' : 'night';
+    const C = {
+      cat: {
+        morning: 'おはよ〜 むりせず いこ', am: 'ごぜんちゅう ふぁいと', noon: `おひる〜 定時まで あと${toEnd}時間くらい`,
+        pm: 'ごご ねむいね…がんばろ', evening: 'もうひとふんばり にゃ', night: 'おつかれ ゆっくりね',
+      },
+      rabbit: {
+        morning: 'おはよう！きょうも いくぞー！', am: 'ごぜん ぜんかい！', noon: `おひる！定時まで あと${toEnd}時間 ふぁいとぉぉ！`,
+        pm: 'ごご も とばそー！', evening: 'ラストスパート がんばろ！', night: 'きょうも おつかれ！はなまる！',
+      },
+      bear: {
+        morning: 'おはよう ゆっくり いこうね', am: 'むりしてない？ みずのんでね', noon: `おひるだね 定時まで あと${toEnd}時間 くらい ぼちぼち`,
+        pm: 'ねむい じかん むりしないで', evening: 'あとすこし おつかれさま', night: 'きょうも よく がんばったね',
+      },
+      penguin: {
+        morning: 'おはようございます。今日も ていねいに', am: '午前の 業務 いきましょう', noon: `お昼です。定時まで あと${toEnd}時間。ペース配分を`,
+        pm: '午後も 確認 わすれずに', evening: '終業まで あとすこし。ミスに注意', night: '本日も おつかれさまでした',
+      },
+      boss: {
+        morning: 'おはよ〜 むりすんなよ', am: 'ぼちぼち いこう', noon: `おひる〜 定時まで あと${toEnd}時間 ふぁいとぉｗ`,
+        pm: 'ねむいよな わかる', evening: 'あとちょっと まかせた', night: 'おつかれ〜 俺は ニートだけどｗ',
+      },
+    };
+    return (C[sp] || C.cat)[band];
+  }
   function pick(arr, i) { return arr[((i % arr.length) + arr.length) % arr.length]; }
-  function talk(i, kind) {
-    const t = TALKS[curSpecies()] || TALKS.cat;
+  function talk(i, kind, sp) {
+    const t = TALKS[sp || curSpecies()] || TALKS.cat;
     if (kind === 'levelup' && t.levelup) return pick(t.levelup, i);
     if (kind === 'lonely' && t.lonely) return pick(t.lonely, i);
     return pick(t.lines, i);
   }
-  const trait = () => (TALKS[curSpecies()] || TALKS.cat).trait;
+  const trait = (sp) => (TALKS[sp || curSpecies()] || TALKS.cat).trait;
 
   /* コレクション（バッジ）。条件を満たすと集まる。 */
   const BADGES = [
@@ -192,16 +233,19 @@ const Pet = (() => {
     return r;
   }
 
-  /* 育てられるキャラの種類。最初は cat だけ。はかせ(Lv6)まで育てると次が解禁される。 */
+  /* 育てられるキャラの種類。最初は cat だけ。はかせ(Lv6)まで育てると次が解禁される。
+   * 最後の boss（社長）は、他の4匹を全員はかせにした人だけが会える隠しキャラ。 */
   const SPECIES = [
     { id: 'cat',     emoji: '🐱', label: 'はちわれ猫' },
     { id: 'rabbit',  emoji: '🐰', label: 'うさぎ' },
     { id: 'bear',    emoji: '🐻', label: 'くま' },
     { id: 'penguin', emoji: '🐧', label: 'ぺんぎん' },
+    { id: 'boss',    emoji: '😎', label: '荒川さん', secret: true },
   ];
+  const NORMAL_SPECIES = ['cat', 'rabbit', 'bear', 'penguin'];
   const curSpecies = () => load().species || 'cat';
   const isMaxed = () => stageOf(load().xp || 0).lv >= 6;
-  /* 解禁済みの種類。cat は最初から。はかせ(Lv6)まで育てるたびに次が1つ開く。
+  /* 通常キャラ（4匹）の解禁。cat は最初から。はかせ(Lv6)まで育てるたびに次が1つ開く。
    * 「いま はかせで、まだ記録に残していない」状態も1つぶんとして数える
    * （そうしないと、解放するには乗り換えが要り、乗り換えには解放が要る…のデッドロックになる）。 */
   function unlocked() {
@@ -209,8 +253,13 @@ const Pet = (() => {
     const cleared = p.cleared || {};
     const bonus = (isMaxed() && !cleared[curSpecies()]) ? 1 : 0;
     const n = 1 + Object.keys(cleared).length + bonus;
-    return SPECIES.slice(0, Math.min(n, SPECIES.length)).map((s) => s.id);
+    const list = NORMAL_SPECIES.slice(0, Math.min(n, NORMAL_SPECIES.length));
+    /* 隠しキャラ「社長」：通常4匹を全員はかせにしたら解禁（今まさに4匹目をクリアした瞬間も含む） */
+    const clearedCount = Object.keys(cleared).filter((k) => NORMAL_SPECIES.includes(k)).length + bonus;
+    if (clearedCount >= NORMAL_SPECIES.length || cleared.boss) list.push('boss');
+    return list;
   }
+  const bossUnlocked = () => unlocked().includes('boss');
   /* 別のキャラに乗り換える。今の子が「はかせ」なら、その種類をクリア済みにして経験値をリセット。
    * 図鑑的に、育てた子の記録（クリア）は残る。 */
   function switchSpecies(id) {
@@ -227,8 +276,8 @@ const Pet = (() => {
   const clearedList = () => load().cleared || {};
 
   return { STAGES, XP, state, stageOf, next, act: actTracked, getName, setName, hasName,
-    mood, talk, BADGES, badges, checkBadges, seeOrg,
-    SPECIES, curSpecies, unlocked, isMaxed, switchSpecies, clearedList,
+    mood, talk, trait, cheer, BADGES, badges, checkBadges, seeOrg,
+    SPECIES, curSpecies, unlocked, isMaxed, bossUnlocked, switchSpecies, clearedList,
     markSeen: (lv) => { const p = load(); p.seenLv = lv; save(p); } };
 })();
 
@@ -240,6 +289,14 @@ function petSVG(form, opts = {}) {
   const mood = opts.mood || 'normal';
   const line = '#4a403a';
   const st = 2.4;
+  /* ポケモン風に、進化するほど体が大きくなる。中身は同じviewBoxのまま拡大する。 */
+  const FSCALE = { egg: 0.8, baby: 0.8, child: 0.9, teen: 0.97, adult: 1.03, master: 1.1 };
+  const fscale = FSCALE[form] || 1;
+  const svg = (inner, label) => {
+    const g = Math.abs(fscale - 1) < 0.001 ? inner
+      : `<g transform="translate(60 70) scale(${fscale}) translate(-60 -70)">${inner}</g>`;
+    return `<svg viewBox="0 0 120 120" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" class="pet-svg" role="img" aria-label="${label || '相棒'}">${g}</svg>`;
+  };
 
   /* 種類ごとの色と耳。 */
   const SP = {
@@ -247,9 +304,31 @@ function petSVG(form, opts = {}) {
     rabbit:  { ink: '#f0e4ea', ear: 'rabbit', hasHachi: false, inner: '#f6b8bf' },
     bear:    { ink: '#c9a06a', ear: 'round',  hasHachi: false },
     penguin: { ink: '#3f4a5a', ear: 'none',   hasHachi: false, belly: true },
+    boss:    { ink: '#2b2730', ear: 'none',   hasHachi: false, human: true, skin: '#f2d3b8', hair: '#2b2730' },
   };
   const s = SP[species] || SP.cat;
   const ink = s.ink;
+
+  /* 隠しキャラ「荒川さん」：黒マッシュ×丸メガネ×フープピアス×全身黒 のクール系。
+   * 参考写真から特徴だけ起こしたオリジナルイラスト（実写は使わない）。 */
+  /* 隠しキャラ「荒川さん」：本人がChatGPTで作った自分のチビ絵を使う（SVGでは描かない）。
+   * たまごだけSVG、育った姿は表情ごとの画像を返す。master(はかせ)はニット帽版。 */
+  if (s.human) {
+    if (form === 'egg') {
+      return `<svg viewBox="0 0 120 120" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" class="pet-svg" role="img" aria-label="たまご">
+        <ellipse cx="60" cy="64" rx="33" ry="39" fill="#fff" stroke="#e7ddd0" stroke-width="${st}"/>
+        <path d="M 30 58 l 8 -8 l 7 8 l 8 -9 l 8 9 l 7 -8 l 9 8" fill="none" stroke="#e7ddd0" stroke-width="${st}" stroke-linejoin="round"/>
+        <path d="M 34 46 Q 34 30 60 30 Q 86 30 86 46 Q 74 40 60 44 Q 46 40 34 46 Z" fill="#241f26"/>
+        <circle cx="52" cy="60" r="2.6" fill="#2b2730"/><circle cx="68" cy="60" r="2.6" fill="#2b2730"/>
+        <path d="M 55 66 Q 60 68 65 66" stroke="#4a403a" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>`;
+    }
+    const asset = form === 'master' ? 'hakase'
+      : mood === 'happy' ? 'happy' : mood === 'lonely' ? 'lonely' : 'normal';
+    /* 画像の場所はオプションで差し替え可（プレビューはdataURIを渡す） */
+    const base = (typeof BOSS_IMG !== 'undefined' && BOSS_IMG) ? BOSS_IMG : {};
+    const src = base[asset] || ('pet-arakawa-' + asset + '.png');
+    return `<img class="pet-svg" src="${src}" width="${size}" height="${size}" alt="荒川さん" style="display:block;object-fit:contain" />`;
+  }
 
   function ears() {
     if (s.ear === 'cat') return `
@@ -320,6 +399,21 @@ function petSVG(form, opts = {}) {
       <circle cx="60" cy="91" r="3.4" fill="#8a78c8"/>`;   // ボウタイ
     return '';
   }
+  /* 白衣（いちにんまえ以降）：全キャラ共通の「検査技師」らしい変化 */
+  function labCoat() {
+    return `<path d="M 30 98 Q 60 90 90 98 L 94 118 L 26 118 Z" fill="#f4f2ee"/>
+            <path d="M 30 98 Q 44 94 60 100 L 60 118 L 26 118 Z" fill="#eceae4"/>
+            <path d="M 60 100 Q 76 94 90 98 L 94 118 L 60 118 Z" fill="#faf9f6"/>
+            <path d="M 52 96 L 60 104 L 68 96 L 66 92 Q 60 95 54 92 Z" fill="#e0ddd4"/>
+            <circle cx="60" cy="108" r="1.1" fill="#c9c4b8"/><circle cx="60" cy="113" r="1.1" fill="#c9c4b8"/>`;
+  }
+  /* 角帽（はかせ）：最終進化の目印 */
+  function gradCap() {
+    return `<path d="M 42 26 L 60 20 L 78 26 L 60 32 Z" fill="#2b2730"/>
+            <rect x="50" y="28" width="20" height="8" rx="1.5" fill="#39343f"/>
+            <path d="M 78 26 L 78 38" stroke="#d6ab57" stroke-width="1.4"/>
+            <circle cx="78" cy="39" r="2.4" fill="var(--sun)"/>`;
+  }
   const feet = `
     <ellipse cx="46" cy="104" rx="9" ry="6" fill="${species === 'penguin' ? 'var(--sun)' : '#fff'}" stroke="#e7ddd0" stroke-width="${st}"/>
     <ellipse cx="74" cy="104" rx="9" ry="6" fill="${species === 'penguin' ? 'var(--sun)' : '#fff'}" stroke="#e7ddd0" stroke-width="${st}"/>`;
@@ -338,13 +432,11 @@ function petSVG(form, opts = {}) {
   } else if (form === 'teen') {
     body = `${ears()}${arms}${costume()}${head()}${feet}`;
   } else if (form === 'adult') {
-    body = `${ears()}${arms}${costume()}${head()}${feet}`;
+    /* いちにんまえ：白衣を羽織る（検査技師らしく・全キャラ共通の分かりやすい変化） */
+    body = `${ears()}${arms}${labCoat(species)}${costume()}${head()}${feet}`;
   } else {
-    body = `${ears()}${arms}${costume()}${head()}${feet}
-      <rect x="40" y="18" width="40" height="8" rx="2" fill="var(--lav)"/>
-      <rect x="52" y="10" width="16" height="10" rx="2" fill="var(--lav)"/>
-      <path d="M 80 22 l 6 3 l -2 8" stroke="var(--sun)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <circle cx="84" cy="33" r="2.6" fill="var(--sun)"/>`;
+    /* はかせ：白衣＋角帽（卒業帽）。最終進化がひと目でわかる */
+    body = `${ears()}${arms}${labCoat(species)}${costume()}${head()}${feet}${gradCap()}`;
   }
   return `<svg viewBox="0 0 120 120" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"
     class="pet-svg" role="img" aria-label="相棒">${body}</svg>`;
