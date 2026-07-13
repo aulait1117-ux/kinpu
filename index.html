@@ -235,6 +235,14 @@ nav.tab button.on{color:var(--mint)}
         <span class="chip sun">📝 ノート <span id="h-note">0</span></span>
       </div>
     </div>
+    <button class="card" id="go-help" style="border-color:var(--lav);background:var(--lav-bg)">
+      <div style="display:flex;gap:9px;align-items:center">
+        <span style="font-size:18px">📗</span>
+        <span style="flex:1"><b style="font-size:14.5px">はじめての人へ — 使い方</b>
+          <small style="display:block;color:var(--tx2);font-size:11.5px">3分で読める。まずここから。</small></span>
+        <span style="color:var(--tx3)">›</span></div>
+    </button>
+
     <h2 class="sec">📖 最近見たもの</h2>
     <div id="h-recent"></div>
     <h2 class="sec">⭐ お気に入り</h2>
@@ -314,6 +322,98 @@ nav.tab button.on{color:var(--mint)}
 
   <section class="screen" id="sc-view">
     <div id="v-body"></div>
+  </section>
+
+  <!-- ===== 使い方 ===== -->
+  <section class="screen" id="sc-help">
+    <div class="hero">
+      <span class="jp" style="font-size:21px">📗 菌譜の使い方</span>
+      <p style="margin:8px 0 0;font-size:13.5px;color:var(--tx2)">
+        手書きノートを「あとから引ける形」にするための道具です。3分で読めます。</p>
+    </div>
+
+    <div class="blk">
+      <h3>📱 まずホーム画面に置く</h3>
+      <p>ブラウザの共有ボタンから「ホーム画面に追加」。アプリのように開けて、電波が無くても動きます。</p>
+    </div>
+
+    <div class="blk">
+      <h3>🦠 菌を選ぶと、そこに全部ある</h3>
+      <p>この菌譜は<b>菌が中心</b>です。菌を1つ開くと、その画面に4つそろっています。</p>
+      <ul>
+        <li><b>感受性を入れる</b> — 薬の S / I / R を押していくと、<b>次にやるべき確認試験</b>が出ます</li>
+        <li><b>効く薬 / 効かない薬</b> — 自然耐性（そもそも効かない）と、必ず感性のはずの薬</li>
+        <li><b>耐性機序</b> — ESBLやAmpCへのリンク</li>
+        <li><b>自分のノート</b> — その菌について書いたことが集まります</li>
+      </ul>
+    </div>
+
+    <div class="blk tip">
+      <h3>🧪 これがいちばん使う機能</h3>
+      <p>たとえば<b>大腸菌</b>を開いて、CTX/CTRX（第3世代）を <b>R</b> にしてみてください。
+        「ESBL確認試験をやる」が出ます。さらにメロペネムも <b>R</b> にすると、CRE として
+        mCIM / eCIM と<b>5類全数届出</b>が赤で出ます。</p>
+      <p style="margin-top:8px">逆もあります。<b>A群溶連菌</b>でペニシリンを <b>R</b> にすると、
+        「菌ではなく<b>検査</b>を疑え」と警告が出ます。溶連菌のペニシリン耐性は世界的に報告が無いからです。</p>
+    </div>
+
+    <div class="blk alert">
+      <h3>⚠️ ここだけは必ず読んで</h3>
+      <p>収録した確認試験のルールは、<b>ぜんぶ「未確認」の下書き</b>です。画面に「未確認 — 鵜呑みにしない」と出ます。</p>
+      <p style="margin-top:8px">CLSI M100 の最新版と、あなたの施設のSOPで1件ずつ突き合わせて、
+        確認できたものにチェックを付けてください。付けたものだけ「確認済み」になります。
+        <b>ブレークポイントの数値は載せていません。</b>毎年変わるので、載せた瞬間に嘘になるからです。</p>
+    </div>
+
+    <div class="blk">
+      <h3>📝 ノートの書き方</h3>
+      <p>右下の <b>＋</b> から書きます。きれいに書かなくていいです。走り書きのままで大丈夫。</p>
+      <ol>
+        <li>手書きノートを<b>📷 写真</b>で撮って貼る</li>
+        <li>思い出せることを雑に打つ（「血培陽性→グラム染色→先生に電話した」で十分）</li>
+        <li><b>✨ AIで整理する</b> を押す</li>
+      </ol>
+      <p style="margin-top:8px">要点・注意点・作業手順・先輩のコツ・関連する菌と薬・タグに、勝手に分けてくれます。
+        タイトルも付きます。</p>
+    </div>
+
+    <div class="blk">
+      <h3>🗂 ノートの種類</h3>
+      <p>ノートには種類を付けられます。あとで種類で絞り込めます。</p>
+      <ul>
+        <li>🦠 細菌検査の知識 ／ 🛠 作業手順・SOP ／ 🚨 機器トラブル</li>
+        <li>📋 症例 ／ 🔬 機器の操作 ／ 📞 申し送り・報告 ／ 💡 先輩メモ</li>
+      </ul>
+      <p style="margin-top:8px">「VITEKがエラーで止まった。先輩がこう直した」は 🚨、
+        「グラム染色の手順」は 🛠、というふうに。</p>
+    </div>
+
+    <div class="blk">
+      <h3>🔍 探す</h3>
+      <p>上の <b>🔍</b> か、ホームの検索バーを押すと、菌・抗菌薬・耐性機序・ノート・タグを<b>まとめて</b>検索します。
+        「mCIM」でも「カルバペネム」でも「あの日のトラブル」でも引けます。</p>
+    </div>
+
+    <div class="blk alert">
+      <h3>🔒 患者情報は一文字も入れない</h3>
+      <p>氏名・カルテID・検体番号・生年月日・病棟番号。これらは<b>絶対に書かない</b>でください。</p>
+      <p style="margin-top:8px">保存時に自動で検出して警告しますが、完全ではありません。
+        <b>写真に検体ラベルや氏名が写り込んでいないか、撮った直後に自分の目で確認してください。</b></p>
+      <p style="margin-top:8px">ノートはあなたのスマホの中にしかありません。外のサーバーには送っていません
+        （「✨AIで整理」を押したときだけ、その本文と写真が整理用のサーバーを一瞬通ります）。</p>
+    </div>
+
+    <div class="blk tip">
+      <h3>💾 バックアップを忘れずに</h3>
+      <p>スマホの中にしか無い、ということは、<b>機種変やブラウザの履歴削除で消える</b>ということです。
+        ⚙️設定 →「書き出す（JSON）」で、ときどき自分にメールしておいてください。</p>
+    </div>
+
+    <div class="blk">
+      <h3>✍️ 足りないものは足せる</h3>
+      <p>収録した86菌で足りなければ、菌タブの「＋ 菌を追加」で自分で足せます。
+        薬剤も自然耐性も自分で入れられます。</p>
+    </div>
   </section>
 
   <!-- ===== 設定 ===== -->

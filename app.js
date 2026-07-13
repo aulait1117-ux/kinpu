@@ -834,7 +834,8 @@ function applyTheme() {
 
 /* ---------- ルーティング ---------- */
 const SCREENS = { home: 'sc-home', orgs: 'sc-orgs', org: 'sc-org', drugs: 'sc-drugs',
-  mechs: 'sc-mechs', mech: 'sc-mech', notes: 'sc-notes', note: 'sc-view', edit: 'sc-edit', set: 'sc-set' };
+  mechs: 'sc-mechs', mech: 'sc-mech', notes: 'sc-notes', note: 'sc-view', edit: 'sc-edit',
+  set: 'sc-set', help: 'sc-help' };
 
 function route() {
   const h = location.hash || '#/home';
@@ -847,8 +848,8 @@ function route() {
 
   $('#btn-back').hidden = ['home', 'orgs', 'drugs', 'mechs', 'notes'].includes(part);
   $('#fab').hidden = !['home', 'notes'].includes(part);
-  const tabOf = { home: 'home', orgs: 'orgs', org: 'orgs', drugs: 'drugs', mechs: 'mechs', mech: 'mechs',
-    notes: 'notes', note: 'notes', edit: 'notes' };
+  const tabOf = { home: 'home', help: 'home', set: 'home', orgs: 'orgs', org: 'orgs',
+    drugs: 'drugs', mechs: 'mechs', mech: 'mechs', notes: 'notes', note: 'notes', edit: 'notes' };
   document.querySelectorAll('nav.tab button').forEach((b) => b.classList.toggle('on', b.dataset.go === tabOf[part]));
 
   if (part === 'home') renderHome();
@@ -869,6 +870,7 @@ $('#btn-back').onclick = () => history.back();
 $('#btn-set').onclick = () => (location.hash = '#/set');
 $('#btn-search').onclick = openPal;
 $('#home-search').onclick = openPal;
+$('#go-help').onclick = () => (location.hash = '#/help');
 $('#btn-theme').onclick = () => {
   save(LS.theme, load(LS.theme, 'light') === 'dark' ? 'light' : 'dark');
   applyTheme();
