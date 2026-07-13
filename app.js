@@ -28,12 +28,36 @@ const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(3
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const nl2 = (s) => esc(s).replace(/\n/g, '<br>');
 
-let notes = load(LS.notes, []);
-let customOrgs = load(LS.orgs, []);
-let verified = load(LS.verified, {});
-let sirState = load(LS.sir, {});
-let recent = load(LS.recent, []);
-let favs = load(LS.fav, []);
+/* localStorageは壊れる（別バージョン・手動編集・容量切れの中断）。
+ * 壊れた1バイトでアプリが起動しないのは論外なので、読み込んだ値の型を必ず均す。 */
+const asList = (v) => (Array.isArray(v) ? v : []);
+const asObj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+const asStr = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+const asStrList = (v) => (Array.isArray(v) ? v.map(asStr).filter(Boolean)
+  : typeof v === 'string' && v.trim() ? [v.trim()] : []);
+
+function sanitizeNote(n) {
+  if (!n || typeof n !== 'object' || !n.id) return null;
+  const t = Number(n.updatedAt) || Number(n.createdAt) || Date.now();
+  return {
+    id: asStr(n.id),
+    kind: KINDS.some((k) => k.id === n.kind) ? n.kind : 'knowledge',
+    title: asStr(n.title), body: asStr(n.body),
+    ai: normAI(n.ai),
+    tags: asStrList(n.tags),
+    orgIds: asStrList(n.orgIds), mechIds: asStrList(n.mechIds), classIds: asStrList(n.classIds),
+    photos: asStrList(n.photos), captions: asObj(n.captions),
+    createdAt: Number(n.createdAt) || t, updatedAt: t,
+  };
+}
+const sanitizeNotes = (v) => asList(v).map(sanitizeNote).filter(Boolean);
+
+let notes = [];
+let customOrgs = [];
+let verified = {};
+let sirState = {};
+let recent = [];
+let favs = [];
 /* AI整理サーバー。知人が設定しなくても使えるよう既定値を入れる（設定画面で差し替え可） */
 let aiUrl = load(LS.ai, 'https://kinpu-ai.aulait11-17.workers.dev');
 
@@ -984,5 +1008,33 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Enter' && items[palSel]) items[palSel].click();
 });
 
+/* 保存されている値を読み込む。何が入っていても、ここで型を均してから使う。
+ * （KINDS・normAI を使うので、それらが定義され終わったこの位置で行う） */
+function boot() {
+  notes = sanitizeNotes(load(LS.notes, []));
+  customOrgs = asList(load(LS.orgs, []))
+    .filter((o) => o && o.id && o.jp)
+    .map((o) => ({
+      id: asStr(o.id), jp: asStr(o.jp), name: asStr(o.name),
+      group: asStr(o.group) || 'そのほか',
+      drugs: asStrList(o.drugs), intrinsic: asStrList(o.intrinsic),
+      intrinsicCodes: asStrList(o.intrinsicCodes),
+      expectedS: asList(o.expectedS).filter((e) => e && e.d),
+      note: asStr(o.note),
+    }));
+  verified = asObj(load(LS.verified, {}));
+  sirState = asObj(load(LS.sir, {}));
+  for (const k of Object.keys(sirState)) sirState[k] = asObj(sirState[k]);
+  recent = asList(load(LS.recent, [])).filter((r) => r && r.type && r.id);
+  favs = asStrList(load(LS.fav, []));
+  aiUrl = asStr(aiUrl) || 'https://kinpu-ai.aulait11-17.workers.dev';
+}
+
+boot();
 applyTheme();
 route();
+
+/* 検査室は電波が入らない。オフラインでも開けるようにする。 */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
