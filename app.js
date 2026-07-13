@@ -9,7 +9,19 @@ const LS = {
   theme: 'kinpu.theme', ai: 'kinpu.aiUrl',
 };
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
-const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+/* localStorage は約5MBで頭打ち。超えると例外を投げるので、黙ってノートを失わないよう捕まえる。
+ * （写真はIndexedDBに逃がしてあるので、ここに来るのは文字だけ） */
+let quotaWarned = false;
+const save = (k, v) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+  catch (e) {
+    if (!quotaWarned) {
+      quotaWarned = true;
+      alert('この端末の保存容量がいっぱいです。\n\n設定 →「書き出す（JSON）」でバックアップを取ってから、\n古いノートを消してください。\n\n※ 今回の変更は保存できていません。');
+    }
+    return false;
+  }
+};
 const $ = (s) => document.querySelector(s);
 const el = (t, c) => { const e = document.createElement(t); if (c) e.className = c; return e; };
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
@@ -196,7 +208,7 @@ function renderOrgs() {
     if (orgFilter === '陽性' && d.g !== '陽性') return false;
     if (orgFilter === '陰性' && d.g !== '陰性') return false;
     if (!q) return true;
-    return norm(`${o.jp} ${o.name} ${o.group} ${(d.dis || []).join(' ')} ${d.res || ''}`).includes(q);
+    return norm(orgText(o)).includes(q);   // 名前だけでなく、感染症・染色像・確認試験の中身まで舐める
   });
   if (!list.length) { box.innerHTML = '<p class="empty">見つからない。「＋ 菌を追加」で足せる。</p>'; return; }
   list.forEach((o) => box.appendChild(orgCard(o)));
@@ -485,22 +497,42 @@ function renderMech(id) {
 /* ---------- 検索 ---------- */
 const norm = (s) => String(s || '').toLowerCase().normalize('NFKC');
 function noteText(n) {
-  const a = n.ai || {};
+  const a = normAI(n.ai) || {};
   return [n.title, n.body, (n.tags || []).join(' '),
     (a.points || []).join(' '), (a.cautions || []).join(' '), (a.steps || []).join(' '),
     (a.tips || []).join(' '), a.summary].join(' ');
+}
+/* 検索は「名前」だけでは足りない。
+ * 現場で引きたいのは mCIM・Dテスト・SMA阻害試験・ニトロセフィン のような手順の名前で、
+ * それは確認試験ルールと耐性機序の検出法の“中身”にしか書かれていない。そこまで舐める。 */
+function ruleText(r) {
+  return [r.title, r.why, r.source, r.notify,
+    (r.tests || []).join(' '), (r.report || []).join(' ')].join(' ');
+}
+function orgText(o) {
+  const d = detOf(o.id);
+  const rules = RULES.filter((r) => r.organisms.includes(o.id)).map(ruleText).join(' ');
+  return [o.jp, o.name, o.group, o.note,
+    d.g, d.s, d.res, (d.dis || []).join(' '), d.stain, d.cult, d.susc, d.ctrl, d.rep, d.memo,
+    (o.intrinsic || []).join(' '), (o.expectedS || []).map((e) => e.d + e.why).join(' '),
+    (o.drugs || []).join(' '), rules].join(' ');
+}
+function mechText(m) {
+  return [m.abbr, m.name, m.en, m.type, m.summary, m.genes, m.breaks, m.spared,
+    (m.detect || []).join(' '), m.pitfall, m.notify].join(' ');
+}
+function classText(c) {
+  return [c.name, c.en, c.big, c.spectrum, c.note,
+    c.items.map((i) => `${i.abbr} ${i.jp} ${i.memo}`).join(' ')].join(' ');
 }
 function searchAll(q) {
   if (!q) return [];
   const t = norm(q).split(/\s+/).filter(Boolean);
   const hit = (s) => t.every((x) => norm(s).includes(x));
   const out = [];
-  allOrgs().forEach((o) => { const d = detOf(o.id);
-    if (hit(`${o.jp} ${o.name} ${o.group} ${(d.dis || []).join(' ')} ${d.res || ''}`)) out.push({ type: 'org', id: o.id }); });
-  MECHANISMS.forEach((m) => { if (hit(`${m.abbr} ${m.name} ${m.en} ${m.summary} ${m.genes}`)) out.push({ type: 'mech', id: m.id }); });
-  DRUG_CLASSES.forEach((c) => {
-    if (hit(`${c.name} ${c.en} ${c.big} ${c.spectrum} ${c.items.map((i) => i.abbr + i.jp).join(' ')}`)) out.push({ type: 'class', id: c.id });
-  });
+  MECHANISMS.forEach((m) => { if (hit(mechText(m))) out.push({ type: 'mech', id: m.id }); });
+  allOrgs().forEach((o) => { if (hit(orgText(o))) out.push({ type: 'org', id: o.id }); });
+  DRUG_CLASSES.forEach((c) => { if (hit(classText(c))) out.push({ type: 'class', id: c.id }); });
   notes.forEach((n) => { if (hit(noteText(n))) out.push({ type: 'note', id: n.id }); });
   return out.slice(0, 40);
 }
@@ -573,7 +605,7 @@ function noteCard(n, q) {
 async function renderView(id) {
   const n = notes.find((x) => x.id === id); if (!n) { location.hash = '#/notes'; return; }
   editing = n; touch('note', id);
-  const k = kindOf(n.kind), a = n.ai || {};
+  const k = kindOf(n.kind), a = normAI(n.ai) || {};
   const b = $('#v-body'); b.innerHTML = '';
 
   const hero = el('div', 'hero');
@@ -646,6 +678,8 @@ let linkSel = { orgIds: [], mechIds: [], classIds: [] };
 
 async function openEdit(arg) {
   piiAck = false; $('#pii-warn').innerHTML = ''; $('#ai-out').innerHTML = '';
+  /* 前のノートのAI整理結果が残ると、次のノートにくっつく。必ず捨てる。 */
+  aiDraft = null;
   const [id, qs] = String(arg || 'new').split('?');
   const pre = new URLSearchParams(qs || '');
   editing = id !== 'new' ? notes.find((n) => n.id === id) : null;
@@ -701,9 +735,24 @@ function drawThumbs() {
     b.appendChild(im);
   });
 }
-function showAI(ai) {
+/* AIが配列を返すはずのところに文字列を返しても、画面を壊さない。
+ * サーバー側でも矯正しているが、外部の返り値は二重に疑う。 */
+const asArr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim())
+  : (typeof v === 'string' && v.trim() ? [v.trim()] : []);
+function normAI(ai) {
+  if (!ai || typeof ai !== 'object') return null;
+  return {
+    summary: typeof ai.summary === 'string' ? ai.summary : '',
+    report: typeof ai.report === 'string' ? ai.report : '',
+    points: asArr(ai.points), cautions: asArr(ai.cautions),
+    steps: asArr(ai.steps), tips: asArr(ai.tips),
+  };
+}
+function showAI(raw) {
+  const ai = normAI(raw);
   const o = $('#ai-out'); o.innerHTML = '';
-  const sec = (t, items) => items?.length ? `<h3 style="margin-top:10px">${t}</h3><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+  if (!ai) return;
+  const sec = (t, items) => items.length ? `<h3 style="margin-top:10px">${t}</h3><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
   const d = el('div', 'blk');
   d.innerHTML = `<h3>✨ AIが整理した</h3>
     ${ai.summary ? `<p><b>${esc(ai.summary)}</b></p>` : ''}

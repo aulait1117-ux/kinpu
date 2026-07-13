@@ -11,7 +11,10 @@
  *   DAILY_LIMIT   … 1日の呼び出し上限（既定：200）。KVバインディング KINPU_KV があるときだけ効く
  */
 
-const MODEL = 'claude-haiku-4-5-20251001';
+/* Haiku では steps（作業手順）を空のまま返してくることが再現した。
+ * 「雑なメモを手順書に起こす」がこの機能の核なので、そこを外す安さは意味がない。
+ * 呼び出しは1日50回で頭打ちにしてあるため、上位モデルでも費用は誤差の範囲。 */
+const MODEL = 'claude-sonnet-5';
 
 const SYSTEM = `あなたは臨床検査技師（微生物検査室・入職3か月目）の相棒です。
 その人が現場で走り書きしたメモや、手書きノートの写真を受け取り、あとから引ける形に整えます。
@@ -21,7 +24,20 @@ const SYSTEM = `あなたは臨床検査技師（微生物検査室・入職3か
 - 入力に書かれていないことを創作しない。メモにない手順を足さない。推測を書くときは「〜かもしれない」と明示する。
 - 医学的な断定をしない。ブレークポイントの数値や判定基準を勝手に書かない。「CLSI M100と施設SOPで確認」と促す。
 - 口調はやさしく、親しみやすく。ただし業務メモなので、かわいさより「あとで読んで分かること」を優先する。
-- 日本語で書く。`;
+- 日本語で書く。
+
+steps（作業手順）の埋め方 — ここを空にしないこと：
+メモに「〜した」「〜する」という行為が2つ以上あれば、必ず steps を時系列に分解して埋める。
+走り書きは主語も順番も省かれている。省かれた部分を補って、次に同じ場面に出くわした人が
+そのまま辿れる手順に書き直すのが、この機能の存在意義。
+例：「血培陽性だったのでグラム染色して先生に電話した」
+  → steps: ["血液培養の陽性を確認する", "グラム染色を実施する", "染色所見を確認する",
+            "主治医へ電話で第一報を入れる", "実施内容を記録に残す"]
+kind を sop（作業手順）にしたのに steps が空、という矛盾は絶対に起こさないこと。
+
+cautions（注意点）の埋め方：
+「先輩に注意された」「間違えやすい」「〜するな と言われた」に類することが書いてあれば、必ず入れる。
+また、そのメモの内容で新人が踏みやすい落とし穴に気づいたら、メモの範囲内で1つ添えてよい。`;
 
 const TOOL = {
   name: 'organize_note',
@@ -33,18 +49,23 @@ const TOOL = {
       kind:     { type: 'string', enum: ['knowledge', 'sop', 'trouble', 'case', 'device', 'handover', 'senpai'],
                   description: 'ノートの種類。knowledge=細菌検査の知識 / sop=作業手順 / trouble=機器トラブル / case=症例 / device=機器操作 / handover=申し送り・報告 / senpai=先輩メモ' },
       summary:  { type: 'string', description: '一言まとめ。40字以内' },
-      points:   { type: 'array', items: { type: 'string' }, description: '要点。3〜5個' },
-      cautions: { type: 'array', items: { type: 'string' }, description: '見落としやすい注意点。無ければ空' },
-      steps:    { type: 'array', items: { type: 'string' }, description: '実際の作業手順。番号は付けず内容だけ。手順の話でなければ空' },
-      tips:     { type: 'array', items: { type: 'string' }, description: '現場のコツ・先輩から教わった内容。無ければ空' },
+      points:   { type: 'array', items: { type: 'string' }, minItems: 3,
+                  description: '要点。必ず配列で3〜5個。1文ずつ分けて配列の要素にする。1本の文字列にまとめない' },
+      cautions: { type: 'array', items: { type: 'string' },
+                  description: '見落としやすい注意点。必ず配列。1件ずつ要素に分ける。無ければ空配列' },
+      steps:    { type: 'array', items: { type: 'string' },
+                  description: '実際にやった／やる作業手順。必ず配列で、1手順=1要素に分ける。番号は付けない。メモに動作が2つ以上あれば必ず埋める（例：「血液培養の陽性を確認する」「グラム染色を実施する」「所見を医師へ電話報告する」）。手順の話が全く無い場合だけ空配列' },
+      tips:     { type: 'array', items: { type: 'string' },
+                  description: '現場のコツ・先輩から教わった内容。必ず配列。1件ずつ要素に分ける。無ければ空配列' },
       report:   { type: 'string', description: '報告・連絡が要る内容。無ければ空文字' },
-      tags:     { type: 'array', items: { type: 'string' }, description: '#付きのタグ。3〜6個。例 #血液培養 #報告 #耐性菌' },
+      tags:     { type: 'array', items: { type: 'string' }, minItems: 3,
+                  description: '#付きのタグ。必ず配列で3〜6個。1個ずつ要素に分ける。例 ["#血液培養","#報告","#MRSA"]' },
       orgIds:   { type: 'array', items: { type: 'string' }, description: '関連する菌のid。渡された一覧の中からだけ選ぶ' },
       mechIds:  { type: 'array', items: { type: 'string' }, description: '関連する耐性機序のid。渡された一覧の中からだけ選ぶ' },
       classIds: { type: 'array', items: { type: 'string' }, description: '関連する抗菌薬系統のid。渡された一覧の中からだけ選ぶ' },
       captions: { type: 'array', items: { type: 'string' }, description: '写真ごとの説明。渡された画像の順番と同じ数だけ' },
     },
-    required: ['title', 'kind', 'summary', 'points', 'tags'],
+    required: ['title', 'kind', 'summary', 'points', 'cautions', 'steps', 'tips', 'tags'],
   },
 };
 
@@ -141,22 +162,38 @@ organize_note ツールを必ず呼んで返してください。id は上の一
     if (!use) return json({ error: 'AIが整理できなかった' }, env, 502);
 
     const out = use.input || {};
-    const ids = (arr, ok) => (arr || []).filter((x) => ok.has(x));
+
+    /* 配列を要求していても、モデルは1本の文字列を返してくることがある（実際に返してきた）。
+     * ここで矯正しないと、アプリ側の .map() が落ちて画面が壊れる。
+     * スキーマの記述だけに頼らず、型はサーバーで保証する。 */
+    const arr = (v) => {
+      if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+      if (typeof v === 'string' && v.trim()) {
+        return v.split(/\r?\n|(?<=。)(?=\S)/)
+          .map((s) => s.replace(/^\s*(?:[-−・*●○]|\d+[.)、]|[①-⑳])\s*/, '').trim())
+          .filter(Boolean);
+      }
+      return [];
+    };
+    const str = (v) => (typeof v === 'string' ? v.trim() : Array.isArray(v) ? v.join(' ') : '');
+    const ids = (v, ok) => arr(v).filter((x) => ok.has(x));
+    const KINDS = ['knowledge', 'sop', 'trouble', 'case', 'device', 'handover', 'senpai'];
+
     return json({
-      title: out.title || '',
-      kind: out.kind || 'knowledge',
-      summary: out.summary || '',
-      points: out.points || [],
-      cautions: out.cautions || [],
-      steps: out.steps || [],
-      tips: out.tips || [],
-      report: out.report || '',
-      tags: out.tags || [],
+      title: str(out.title),
+      kind: KINDS.includes(out.kind) ? out.kind : 'knowledge',
+      summary: str(out.summary),
+      points: arr(out.points),
+      cautions: arr(out.cautions),
+      steps: arr(out.steps),
+      tips: arr(out.tips),
+      report: str(out.report),
+      tags: arr(out.tags).map((t) => (t.startsWith('#') ? t : '#' + t)),
       /* AIがidを作り話しても弾く。存在するidだけ通す。 */
       orgIds: ids(out.orgIds, new Set((body.organisms || []).map((o) => o.id))),
       mechIds: ids(out.mechIds, new Set((body.mechanisms || []).map((m) => m.id))),
       classIds: ids(out.classIds, new Set((body.classes || []).map((c) => c.id))),
-      captions: out.captions || [],
+      captions: arr(out.captions),
     }, env);
   },
 };
