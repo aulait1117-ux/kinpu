@@ -1,0 +1,14 @@
+{
+  "name": "菌譜 — 抗菌薬耐性ノート",
+  "short_name": "菌譜",
+  "description": "菌ごとに、自分のノート・自然耐性・耐性が出たときの追加検査をまとめて引く。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16140f",
+  "theme_color": "#16140f",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
